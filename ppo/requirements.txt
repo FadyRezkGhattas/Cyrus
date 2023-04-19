@@ -1,0 +1,9 @@
+flax
+gym
+optax
+envpool
+tabulate
+nvitop
+wandb
+torch --index-url https://download.pytorch.org/whl/cu118
+torchvision --index-url https://download.pytorch.org/whl/cu118
