@@ -6,5 +6,5 @@ docker run --gpus all -itd l2o -c 'source /root/miniconda3/etc/profile.d/conda.s
 
 with the entrypoint, only do:
 ```
-docker run --gpus all -itd l2o 'git clone https://github.com/FadyRezkGhattas/Cyrus.git && cd Cyrus/ppo && python ppo_atari_envpool_xla_jax_scan.py' 
+docker run --gpus all -itd l2o -- bash -c 'source /root/miniconda3/etc/profile.d/conda.sh && conda activate main && git clone https://github.com/FadyRezkGhattas/Cyrus.git && cd Cyrus/ppo && python ppo_atari_envpool_xla_jax_scan.py'
 ```
