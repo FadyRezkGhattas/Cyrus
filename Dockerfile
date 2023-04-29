@@ -7,7 +7,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
-    wget git && rm -rf /var/lib/apt/lists/*
+    wget && rm -rf /var/lib/apt/lists/*
 
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
     && mkdir /root/.conda \
@@ -31,8 +31,5 @@ RUN pip install -r requirements.txt
 
 # because pytorch overrides the cudnn version, have to reinstall
 RUN echo y | pip install nvidia-cudnn-cu11 --force-reinstall
-
-RUN git clone https://github.com/google/learned_optimization
-RUN pip install -e ./learned_optimization/.
 
 ENTRYPOINT ["/bin/bash"]
