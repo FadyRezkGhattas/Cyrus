@@ -16,7 +16,13 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
 
 RUN conda init bash
 RUN conda create -n main python=3.10 -y
-RUN echo "conda activate main" >> ~/.bashrc
+
+# Configure the shell environment
+RUN echo ". /root/miniconda3/etc/profile.d/conda.sh" >> ~/.bashrc \
+    && echo "conda activate main" >> ~/.bashrc
+
+# Set the default Conda environment
+RUN conda init bash && conda config --set auto_activate_base false
 
 SHELL ["conda", "run", "-n", "main", "/bin/bash", "-c"]
 
@@ -35,4 +41,4 @@ RUN echo y | pip install nvidia-cudnn-cu11 --force-reinstall
 RUN git clone https://github.com/google/learned_optimization
 RUN pip install -e ./learned_optimization/.
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["conda", "run", "-n", "main", "/bin/bash", "-c"]
