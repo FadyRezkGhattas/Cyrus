@@ -203,7 +203,7 @@ class VeloState(TrainState):
 
 if __name__ == '__main__':
     args = parse_args()
-    use_velo = 'velo' if args.use_velo == 'Apple' else 'adam'
+    use_velo = 'velo' if args.use_velo else 'adam'
     run_name = f"{use_velo}__{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
