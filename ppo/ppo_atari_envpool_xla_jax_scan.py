@@ -78,7 +78,7 @@ def parse_args():
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
-    parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+    parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Repalce Adam optimiser with VeLO from learned optimization library")
     
     args = parser.parse_args()
