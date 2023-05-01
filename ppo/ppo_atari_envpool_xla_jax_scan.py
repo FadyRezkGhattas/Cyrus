@@ -4,7 +4,8 @@ import random
 import time
 from distutils.util import strtobool
 from functools import partial
-from typing import Sequence
+from typing import Sequence, Any
+import dataclasses as dc
 
 import envpool
 import flax
@@ -14,6 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from learned_optimization.research.general_lopt import prefab
 from flax.linen.initializers import constant, orthogonal
 from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
@@ -76,6 +78,9 @@ def parse_args():
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
+    parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Repalce Adam optimiser with VeLO from learned optimization library")
+    
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
@@ -173,6 +178,28 @@ class EpisodeStatistics:
     returned_episode_returns: jnp.array
     returned_episode_lengths: jnp.array
 
+class VeloState(TrainState):
+    # A simple extension of TrainState to also include batch statistics
+    # If a model has no batch statistics, it is None
+    batch_stats : Any = None
+    # You can further extend the TrainState by any additional part here
+    # For example, rng to keep for init, dropout, etc.
+    rng : Any = None
+    # Save loss as a state because learned optimizers need it as input
+    # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
+    loss : Any = dc.field(default_factory=lambda: jnp.asarray(jnp.inf))
+
+    def apply_gradients(self, *, grads, **kwargs):
+        # Change update signature to pass loss as expected by VeLO
+        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
+        new_params = optax.apply_updates(self.params, updates)
+        
+        return self.replace(
+            step = self.step + 1,
+            params = new_params,
+            opt_state = new_opt_state,
+            **kwargs
+        )
 
 if __name__ == '__main__':
     args = parse_args()
@@ -242,21 +269,32 @@ if __name__ == '__main__':
     actor = Actor(action_dim=envs.single_action_space.n)
     critic = Critic()
     network_params = network.init(network_key, np.array([envs.single_observation_space.sample()]))
-    
-    agent_state = TrainState.create(
-        apply_fn=None,
-        params=AgentParams(
-            network_params,
-            actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
-            critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
-        ),
-        tx=optax.chain(
-            optax.clip_by_global_norm(args.max_grad_norm),
-            optax.inject_hyperparams(optax.adam)(
-                learning_rate=linear_schedule if args.anneal_lr else args.learning_rate, eps=1e-5
+
+    if args.use_velo:
+        agent_state = VeloState.create(
+            apply_fn=None,
+            params=AgentParams(
+                network_params,
+                actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
+                critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
             ),
-        ),
-    )
+            tx=prefab.optax_lopt(args.total_timesteps)
+        )
+    else:
+        agent_state = TrainState.create(
+            apply_fn=None,
+            params=AgentParams(
+                network_params,
+                actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
+                critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
+            ),
+            tx=optax.chain(
+                optax.clip_by_global_norm(args.max_grad_norm),
+                optax.inject_hyperparams(optax.adam)(
+                    learning_rate=linear_schedule if args.anneal_lr else args.learning_rate, eps=1e-5
+                ),
+            )
+        )
 
     network.apply = jax.jit(network.apply)
     actor.apply = jax.jit(actor.apply)
@@ -387,7 +425,10 @@ if __name__ == '__main__':
                     minibatch.returns,
                 )
                 # TODO: do whatever with gradients here
-                agent_state = agent_state.apply_gradients(grads=grads)
+                if args.use_velo:
+                    agent_state = agent_state.apply_gradients(grads=grads, loss=loss)
+                else:
+                    agent_state = agent_state.apply_gradients(grads=grads)
                 return agent_state, (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
             agent_state, (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
@@ -453,7 +494,8 @@ if __name__ == '__main__':
         writer.add_scalar(
             "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
         )
-        writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
+        if not args.use_velo:
+            writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
         writer.add_scalar("losses/value_loss", v_loss[-1, -1].item(), global_step)
         writer.add_scalar("losses/policy_loss", pg_loss[-1, -1].item(), global_step)
         writer.add_scalar("losses/entropy", entropy_loss[-1, -1].item(), global_step)
