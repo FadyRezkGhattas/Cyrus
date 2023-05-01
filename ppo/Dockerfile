@@ -1,24 +1,33 @@
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
-ENV PATH="/root/miniconda3/bin:${PATH}"
-ARG PATH="/root/miniconda3/bin:${PATH}"
+#ENV PATH="/root/miniconda3/bin:${PATH}"
+#ARG PATH="/root/miniconda3/bin:${PATH}"
 
 SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
-    wget git && rm -rf /var/lib/apt/lists/*
+    wget git bzip2 ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    && mkdir /root/.conda \
-    && bash Miniconda3-latest-Linux-x86_64.sh -b \
-    && rm -f Miniconda3-latest-Linux-x86_64.sh
+# Download and install Miniconda for all users
+RUN curl -Lso /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    /bin/bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm -f /tmp/miniconda.sh
+
+# Set environment variables for Conda
+ENV PATH /opt/conda/bin:$PATH
+ENV CONDA_DIR /opt/conda
+
+# Allow all users to activate Conda without root privileges
+RUN chmod -R a+rwx /opt/conda && \
+    find /opt/conda/ -type d -exec chmod a+x {} \; && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> /etc/skel/.bashrc
 
 RUN conda init bash
 RUN conda create -n main python=3.10 -y
 
 # Configure the shell environment
-RUN echo ". /root/miniconda3/etc/profile.d/conda.sh" >> ~/.bashrc \
+RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc \
     && echo "conda activate main" >> ~/.bashrc
 
 # Set the default Conda environment
@@ -41,4 +50,6 @@ RUN echo y | pip install nvidia-cudnn-cu11 --force-reinstall
 RUN git clone https://github.com/google/learned_optimization
 RUN pip install -e ./learned_optimization/.
 
-ENTRYPOINT ["conda", "run", "-n", "main", "/bin/bash", "-c"]
+RUN mkdir -p /workspace && chown -R 42420:42420 /workspace
+ENV HOME /workspace
+WORKDIR /workspace
