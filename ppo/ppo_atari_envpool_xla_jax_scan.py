@@ -187,7 +187,7 @@ class VeloState(TrainState):
     rng : Any = None
     # Save loss as a state because learned optimizers need it as input
     # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
-    loss : Any = dc.field(default_factory=lambda: jnp.asarray(jnp.inf))
+    loss : Any = dc.field(default_factory=lambda: jnp.asarray(0))
 
     def apply_gradients(self, *, grads, **kwargs):
         # Change update signature to pass loss as expected by VeLO
