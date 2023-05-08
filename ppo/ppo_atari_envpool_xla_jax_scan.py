@@ -289,7 +289,7 @@ if __name__ == '__main__':
                 actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
                 critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
             ),
-            tx=prefab.optax_lopt(args.num_updates * args.update_epochs)
+            tx=prefab.optax_lopt(args.num_updates * args.update_epochs * args.minibatch_size)
         )
     else:
         agent_state = TrainState.create(
