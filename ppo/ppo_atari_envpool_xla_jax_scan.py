@@ -282,6 +282,7 @@ if __name__ == '__main__':
     network_params = network.init(network_key, np.array([envs.single_observation_space.sample()]))
 
     if args.use_velo:
+        total_steps = args.num_updates * args.update_epochs * args.num_minibatches
         agent_state = VeloState.create(
             apply_fn=None,
             params=AgentParams(
@@ -289,7 +290,7 @@ if __name__ == '__main__':
                 actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
                 critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
             ),
-            tx=prefab.optax_lopt(args.num_updates * args.update_epochs * args.minibatch_size)
+            tx=prefab.optax_lopt(total_steps)
         )
     else:
         agent_state = TrainState.create(
