@@ -77,7 +77,7 @@ if __name__ == "__main__":
             os.environ["WANDB_TAGS"] = wandb_tag
 
     commands = []
-    for seed in range(0, args.num_seeds):
+    for seed in range(args.start_seed, args.start_seed + args.num_seeds):
         for env_id in args.env_ids:
             commands += [" ".join([args.command, "--env-id", env_id, "--seed", str(args.start_seed + seed)])]
 
@@ -89,8 +89,8 @@ if __name__ == "__main__":
         from concurrent.futures import ThreadPoolExecutor
 
         executor = ThreadPoolExecutor(max_workers=args.workers, thread_name_prefix="cleanrl-benchmark-worker-")
-        for command in commands:
-            executor.submit(run_experiment, command)
-        executor.shutdown(wait=True)
+        #for command in commands:
+        #    executor.submit(run_experiment, command)
+        #executor.shutdown(wait=True)
     else:
         print("not running the experiments because --workers is set to 0; just printing the commands to run")
