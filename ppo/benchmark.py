@@ -89,8 +89,8 @@ if __name__ == "__main__":
         from concurrent.futures import ThreadPoolExecutor
 
         executor = ThreadPoolExecutor(max_workers=args.workers, thread_name_prefix="cleanrl-benchmark-worker-")
-        #for command in commands:
-        #    executor.submit(run_experiment, command)
-        #executor.shutdown(wait=True)
+        for command in commands:
+            executor.submit(run_experiment, command)
+        executor.shutdown(wait=True)
     else:
         print("not running the experiments because --workers is set to 0; just printing the commands to run")
