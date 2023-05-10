@@ -52,7 +52,6 @@ class VeloTrainerModule(TrainerModule):
                  **kwargs)
     
     def init_optimizer(self, num_epochs : int, num_steps_per_epoch : int):
-        self.optimizer_name = 'velo'
         # Initialize frozen VeLO
         NUM_STEPS = num_epochs * num_steps_per_epoch
         opt = prefab.optax_lopt(NUM_STEPS)
