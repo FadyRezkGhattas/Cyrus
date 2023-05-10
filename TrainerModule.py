@@ -130,11 +130,14 @@ class TrainerModule:
             wandb.init(
                 project=logger_params['wandb_project_name'],
                 entity=logger_params['wandb_entity'],
-                #sync_tensorboard=True,
+                sync_tensorboard=True,
                 config=self.config, # Save all hyperparameters
                 name=self.run_name
             )
         self.writer = SummaryWriter(f"runs/{self.run_name}")
+
+        # Create metrics folder for logging
+        os.makedirs(os.path.join(f"runs/{self.run_name}", 'metrics/'), exist_ok=True)
 
     def init_model(self, exmp_input : Any):
         """Creates an initial training state with newly generated network paramters.
@@ -395,7 +398,7 @@ class TrainerModule:
             filename (str): Name of the metrics file without folders and postfix.
             metrics (Dict[str, Any]): A dictionary of metrics to save in the file.
         """
-        with open(os.path.join(self.run_name, f'metrics/{filename}.json'), 'w') as f:
+        with open(os.path.join(f'runs/{self.run_name}/metrics/{filename}.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
 
     def log(self, metrics : Dict[str, Any], step : int):
