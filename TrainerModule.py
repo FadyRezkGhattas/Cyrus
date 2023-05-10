@@ -105,6 +105,9 @@ class TrainerModule:
             'seed': self.seed
         })
         self.config.update(kwargs)
+        # Set experiment name
+        model = self.config["model_class"]
+        self.run_name = f"{model}__{self.optimizer_name}__{self.seed}__{int(time.time())}"
 
         # Create empty model. Note: no parameters yet
         self.model = self.model_class(**self.model_hparams)
@@ -121,10 +124,6 @@ class TrainerModule:
         Args:
             logger_params (Optional[Dict], optional): A dictionary containing the specification of the logger. Defaults to None.
         """  
-        # Set experiment name
-        model = self.config["model_class"]
-        run_name = f"{model}__{self.optimizer_name}__{self.seed}__{int(time.time())}"
-
         # Create logger object
         track = logger_params.get('track', False)
         if track:
@@ -133,9 +132,9 @@ class TrainerModule:
                 entity=logger_params['wandb_entity'],
                 #sync_tensorboard=True,
                 config=self.config, # Save all hyperparameters
-                name=run_name
+                name=self.run_name
             )
-        self.writer = SummaryWriter(f"runs/{run_name}")
+        self.writer = SummaryWriter(f"runs/{self.run_name}")
 
     def init_model(self, exmp_input : Any):
         """Creates an initial training state with newly generated network paramters.
@@ -396,7 +395,7 @@ class TrainerModule:
             filename (str): Name of the metrics file without folders and postfix.
             metrics (Dict[str, Any]): A dictionary of metrics to save in the file.
         """
-        with open(os.path.join(self.log_dir, f'metrics/{filename}.json'), 'w') as f:
+        with open(os.path.join(self.run_name, f'metrics/{filename}.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
 
     def log(self, metrics : Dict[str, Any], step : int):
@@ -448,7 +447,7 @@ class TrainerModule:
         Args:
           step (int): Index of the step to save the model at, e.g. epoch.
         """
-        checkpoints.save_checkpoint(ckpt_dir=self.log_dir,
+        checkpoints.save_checkpoint(ckpt_dir=self.run_name,
                                     target={'params': self.state.params,
                                             'batch_stats': self.state.batch_stats},
                                     step=step,
@@ -458,7 +457,7 @@ class TrainerModule:
         """
         Loads model parameters and batch statistics from the logging directory.
         """
-        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
+        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.run_name, target=None)
         self.state = TrainState.create(apply_fn=self.model.apply,
                                        params=state_dict['params'],
                                        batch_stats=state_dict['batch_stats'],
