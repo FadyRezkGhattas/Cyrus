@@ -13,6 +13,12 @@ from jaxopt import tree_util
 import jax.numpy as jnp
 
 class VeloState(TrainState):
+    def __init__(self,
+                 args,
+                 **kwargs):
+        super().__init__(args, **kwargs)
+        self.optimizer_name = 'velo'
+        
     def apply_gradients(self, *, grads, **kwargs):
         # Change update signature to pass loss as expected by VeLO
         updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
@@ -27,6 +33,7 @@ class VeloState(TrainState):
 
 class VeloTrainerModule(TrainerModule):
     def init_optimizer(self, num_epochs : int, num_steps_per_epoch : int):
+        self.optimizer_name = 'velo'
         # Initialize frozen VeLO
         NUM_STEPS = num_epochs * num_steps_per_epoch
         opt = prefab.optax_lopt(NUM_STEPS)

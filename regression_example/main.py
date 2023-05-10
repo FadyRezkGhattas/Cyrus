@@ -17,7 +17,11 @@ train_loader, val_loader, test_loader = create_data_loaders(train_set, val_set, 
 trainer = MLPRegressTrainer(hidden_dims=[128, 128],
                             output_dim=1,
                             optimizer_hparams={'lr': 4e-3},
-                            logger_params={'base_log_dir': './saved_models/'},
+                            logger_params={
+                                'track': True,
+                                'wandb_project_name': 'test_project',
+                                'wandb_entity': 'fastautomate'
+                            },
                             exmp_input=next(iter(train_loader))[0:1],
                             check_val_every_n_epoch=5)
 
