@@ -12,30 +12,26 @@ from ResNet import ResNet50
 # Dataset
 from dataloaders import cifar10
 
+from ResNetTrainer import ResNetTrainer
+
 from TrainerModule import TrainState
 
 train_loader, val_loader, test_loader = cifar10.get_data(64)
-exmp_input=next(iter(train_loader))
 
-# Create Network
-model = ResNet50(num_classes=10)
+trainer = ResNetTrainer(num_classes = 10,                    
+                        optimizer_hparams={
+                            'optimizer': 'adam',
+                            'lr': 1e-3
+                        },
+                        logger_params={
+                            'track': True,
+                            'wandb_project_name': 'test_project',
+                            'wandb_entity': 'fastautomate'
+                        },
+                        exmp_input=next(iter(train_loader)),
+                        check_val_every_n_nepoch = 5)
 
-# Init Model States
-model_rng = random.PRNGKey(1)
-model_rng, init_rng = random.split(model_rng)
-imgs, _ = exmp_input
-init_rng, dropout_rng = random.split(init_rng)
-variables = model.init({'params': init_rng}, x=imgs, train=False)
-state = TrainState(step=0, 
-                    apply_fn=model.apply,
-                    params=variables['params'],
-                    batch_stats=variables.get('batch_stats'),
-                    rng=model_rng,
-                    tx=None,
-                    opt_state=None)
-
-# Forward Pass
-batch = next(iter(train_loader))
-x, y = batch
-pred = model.apply({'params': variables['params'], 'batch_stats': variables['batch_stats']}, x, mutable=['batch_stats'], train=True)
-pred
+metrics = trainer.train_model(train_loader,
+                              val_loader,
+                              test_loader=test_loader,
+                              num_epochs=50)
