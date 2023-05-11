@@ -450,7 +450,7 @@ class TrainerModule:
         Args:
           step (int): Index of the step to save the model at, e.g. epoch.
         """
-        checkpoints.save_checkpoint(ckpt_dir=self.run_name,
+        checkpoints.save_checkpoint(ckpt_dir=f"runs/{self.run_name}",
                                     target={'params': self.state.params,
                                             'batch_stats': self.state.batch_stats},
                                     step=step,
@@ -460,7 +460,7 @@ class TrainerModule:
         """
         Loads model parameters and batch statistics from the logging directory.
         """
-        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.run_name, target=None)
+        state_dict = checkpoints.restore_checkpoint(ckpt_dir=f"runs/{self.run_name}", target=None)
         self.state = TrainState.create(apply_fn=self.model.apply,
                                        params=state_dict['params'],
                                        batch_stats=state_dict['batch_stats'],
