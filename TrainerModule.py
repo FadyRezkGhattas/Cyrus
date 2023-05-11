@@ -402,8 +402,7 @@ class TrainerModule:
             json.dump(metrics, f, indent=4)
 
     def log(self, metrics : Dict[str, Any], step : int):
-        for key, value in metrics.items():
-            self.writer.add_scalar(key, value, step)
+        wandb.log(metrics, step)
 
     def on_training_start(self):
         """
