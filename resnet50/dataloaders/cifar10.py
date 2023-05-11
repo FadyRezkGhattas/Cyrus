@@ -23,9 +23,7 @@ def get_data(batch_size):
         return img
 
     train_dataset = CIFAR10(root=DATASET_PATH, train=True, transform=image_to_numpy, download=True)
-    val_dataset = CIFAR10(root=DATASET_PATH, train=True, transform=image_to_numpy, download=True)
-    train_set, _ = data.random_split(train_dataset, [45000, 5000], generator=torch.Generator().manual_seed(42))
-    _, val_set = data.random_split(val_dataset, [45000, 5000], generator=torch.Generator().manual_seed(42))
+    train_set, val_set = data.random_split(train_dataset, [45000, 5000], generator=torch.Generator().manual_seed(42))
 
     # Loading the test set
     test_set = CIFAR10(root=DATASET_PATH, train=False, transform=image_to_numpy, download=True)
