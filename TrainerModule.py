@@ -400,6 +400,7 @@ class TrainerModule:
         """
         with open(os.path.join(f'runs/{self.run_name}/metrics/{filename}.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
+        wandb.save(f'runs/{self.run_name}/metrics/{filename}.json')
 
     def log(self, metrics : Dict[str, Any], step : int):
         wandb.log(metrics, step)
