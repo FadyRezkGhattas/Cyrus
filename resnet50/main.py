@@ -55,4 +55,4 @@ if __name__ == '__main__':
     metrics = trainer.train_model(train_loader,
                                 val_loader,
                                 test_loader=test_loader,
-                                num_epochs=50)
+                                num_epochs=args.epochs)
