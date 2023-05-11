@@ -5,7 +5,7 @@ sys.path.append(parent_dir)
 
 from RegressionDataset import RegressionDataset
 from TrainerModule import create_data_loaders  
-from Trainer import MLPRegressTrainer
+from examples.regression.MLPRegressTrainer import MLPRegressTrainer
 
 train_set = RegressionDataset(num_points=1000, seed=42)
 val_set = RegressionDataset(num_points=200, seed=43)
