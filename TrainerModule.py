@@ -24,8 +24,21 @@ import optax
 import torch
 import torch.utils.data as data
 
-# Logging with Tensorboard or Weights and Biases
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+# Logging with Tensorboard and/or Weights and Biases
+from torch.utils.tensorboard import SummaryWriter
+import wandb
+
+from collections.abc import MutableMapping
+
+def flatten_dict(d: MutableMapping, parent_key: str = '', sep: str ='.') -> MutableMapping:
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        if isinstance(v, MutableMapping):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 ####
 ## Entities
@@ -39,7 +52,7 @@ class TrainState(train_state.TrainState):
     rng : Any = None
     # Save loss as a state because learned optimizers need it as input
     # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
-    loss : Any = dc.field(default_factory=lambda: jnp.asarray(jnp.inf))
+    loss : Any = dc.field(default_factory=lambda: jnp.asarray(0))
 
 ####
 ## Module
@@ -79,8 +92,9 @@ class TrainerModule:
         self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.exmp_input = exmp_input
+        self.optimizer_name = self.optimizer_hparams.pop('optimizer', 'adamw')
         # Set of hyperparameters to save
-        self.config = {
+        self.config = dict({
             'model_class': model_class.__name__,
             'model_hparams': model_hparams,
             'optimizer_hparams': optimizer_hparams,
@@ -89,8 +103,11 @@ class TrainerModule:
             'debug': self.debug,
             'check_val_every_n_epoch': check_val_every_n_epoch,
             'seed': self.seed
-        }
+        })
         self.config.update(kwargs)
+        # Set experiment name
+        model = self.config["model_class"]
+        self.run_name = f"{model}__{self.optimizer_name}__{self.seed}__{int(time.time())}"
 
         # Create empty model. Note: no parameters yet
         self.model = self.model_class(**self.model_hparams)
@@ -106,43 +123,21 @@ class TrainerModule:
 
         Args:
             logger_params (Optional[Dict], optional): A dictionary containing the specification of the logger. Defaults to None.
-        """
-        if logger_params is None:
-            logger_params = dict()
+        """  
+        # Create logger object
+        track = logger_params.get('track', False)
+        if track:
+            wandb.init(
+                project=logger_params['wandb_project_name'],
+                entity=logger_params['wandb_entity'],
+                sync_tensorboard=True,
+                config=self.config, # Save all hyperparameters
+                name=self.run_name
+            )
+        self.writer = SummaryWriter(f"runs/{self.run_name}")
 
-        # Determine logging directory
-        log_dir = logger_params.get('log_dir', None)
-        if not log_dir:
-            base_log_dir = logger_params.get('base_log_dir', 'checkpoints/')
-            # Prepare logging
-            log_dir = os.path.join(base_log_dir, self.config["model_class"])
-            if 'logger_name' in logger_params:
-                log_dir = os.path.join(log_dir, logger_params['logger_name'])
-            version = None
-        else:
-            version = ''
-        
-        # Creta logger object
-        logger_type = logger_params.get('logger_type', 'TensorBoard').lower()
-        if logger_type == 'tensorboard':
-            self.logger = TensorBoardLogger(save_dir=log_dir, 
-                                            version=version,
-                                            name='')
-        elif logger_type == 'wandb':
-            self.logger = WandbLogger(name=logger_params.get('project_name', None),
-                                      save_dir=log_dir, 
-                                      version=version,
-                                      config=self.config)
-        else:
-            assert False, f'Unknown logger type \"{logger_type}\"'
-
-        # Save hyperparameters
-        log_dir = self.logger.log_dir
-        if not os.path.isfile(os.path.join(log_dir, 'hparams.json')):
-            os.makedirs(os.path.join(log_dir, 'metrics/'), exist_ok=True)
-            with open(os.path.join(log_dir, 'hparams.json'), 'w') as f:
-                json.dump(self.config, f, indent=4)
-        self.log_dir = log_dir
+        # Create metrics folder for logging
+        os.makedirs(os.path.join(f"runs/{self.run_name}", 'metrics/'), exist_ok=True)
 
     def init_model(self, exmp_input : Any):
         """Creates an initial training state with newly generated network paramters.
@@ -195,12 +190,11 @@ class TrainerModule:
         hparams = copy(self.optimizer_hparams)
 
         # Initialize optimizer
-        optimizer_name = hparams.pop('optimizer', 'adamw')
-        if optimizer_name.lower() == 'adam':
+        if self.optimizer_name.lower() == 'adam':
             opt_class = optax.adam
-        elif optimizer_name.lower() == 'adamw':
+        elif self.optimizer_name.lower() == 'adamw':
             opt_class = optax.adamw
-        elif optimizer_name.lower() == 'sgd':
+        elif self.optimizer_name.lower() == 'sgd':
             opt_class = optax.sgd
         else:
             assert False, f'Unknown optimizer "{opt_class}"'
@@ -290,13 +284,13 @@ class TrainerModule:
         # Training loop
         for epoch_idx in self.tracker(range(1, num_epochs+1), desc='Epochs'):
             train_metrics = self.train_epoch(train_loader)
-            self.logger.log_metrics(train_metrics, step=epoch_idx)
+            self.log(train_metrics, step=epoch_idx)
             self.on_training_epoch_end(epoch_idx)
             # Validation every N epochs
             if epoch_idx % self.check_val_every_n_epoch == 0:
                 eval_metrics = self.eval_model(val_loader, log_prefix='val/')
                 self.on_validation_epoch_end(epoch_idx, eval_metrics, val_loader)
-                self.logger.log_metrics(eval_metrics, step=epoch_idx)
+                self.log(eval_metrics, step=epoch_idx)
                 self.save_metrics(f'eval_epoch_{str(epoch_idx).zfill(3)}', eval_metrics)
                 # Save best model
                 if self.is_new_model_better(eval_metrics, best_eval_metrics):
@@ -309,12 +303,10 @@ class TrainerModule:
         if test_loader is not None:
             self.load_model()
             test_metrics = self.eval_model(test_loader, log_prefix='test/')
-            self.logger.log_metrics(test_metrics, step=epoch_idx)
+            self.log(test_metrics, step=epoch_idx)
             self.save_metrics('test', test_metrics)
             best_eval_metrics.update(test_metrics)
         
-        # Close logger
-        self.logger.finalize('success')
         return best_eval_metrics
     
     def train_epoch(self, train_loader : Iterator) -> Dict[str, Any]:
@@ -406,8 +398,12 @@ class TrainerModule:
             filename (str): Name of the metrics file without folders and postfix.
             metrics (Dict[str, Any]): A dictionary of metrics to save in the file.
         """
-        with open(os.path.join(self.log_dir, f'metrics/{filename}.json'), 'w') as f:
+        with open(os.path.join(f'runs/{self.run_name}/metrics/{filename}.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
+
+    def log(self, metrics : Dict[str, Any], step : int):
+        for key, value in metrics.items():
+            self.writer.add_scalar(key, value, step)
 
     def on_training_start(self):
         """
@@ -454,7 +450,7 @@ class TrainerModule:
         Args:
           step (int): Index of the step to save the model at, e.g. epoch.
         """
-        checkpoints.save_checkpoint(ckpt_dir=self.log_dir,
+        checkpoints.save_checkpoint(ckpt_dir=self.run_name,
                                     target={'params': self.state.params,
                                             'batch_stats': self.state.batch_stats},
                                     step=step,
@@ -464,7 +460,7 @@ class TrainerModule:
         """
         Loads model parameters and batch statistics from the logging directory.
         """
-        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
+        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.run_name, target=None)
         self.state = TrainState.create(apply_fn=self.model.apply,
                                        params=state_dict['params'],
                                        batch_stats=state_dict['batch_stats'],
