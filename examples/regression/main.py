@@ -1,7 +1,7 @@
 import sys
 import os.path
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+sys.path.append(parent_dir)
 
 from RegressionDataset import RegressionDataset
 from TrainerModule import create_data_loaders  

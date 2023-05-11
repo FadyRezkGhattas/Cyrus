@@ -9,7 +9,7 @@ from typing import Sequence
 import jax
 from VeloTrainerModule import VeloTrainerModule
 
-class MLPRegressTrainer(TrainerModule):
+class MLPRegressTrainer(VeloTrainerModule):
     
     def __init__(self,
                  hidden_dims : Sequence[int],

@@ -1,7 +1,7 @@
 import sys
 import os.path
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+sys.path.append(parent_dir)
 
 import numpy as np
 from torchvision.datasets import CIFAR10
@@ -49,8 +49,10 @@ trainer = MLPClassTrainer(hidden_dims=[512, 512],
                               'lr': 1e-3
                           },
                           logger_params={
-                              'base_log_dir': CHECKPOINT_PATH
-                          },
+                                'track': True,
+                                'wandb_project_name': 'test_project',
+                                'wandb_entity': 'fastautomate'
+                            },
                           exmp_input=next(iter(train_loader)),
                           check_val_every_n_epoch=5)
 
