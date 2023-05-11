@@ -14,7 +14,7 @@ import optax
 from ResNet import ResNet50
 ResNet50.__name__ = 'ResNet50'
 
-class ResNetTrainer(TrainerModule):
+class ResNetTrainer(VeloTrainerModule):
     def __init__(self,
                  num_classes : int,
                  dtype : jnp.dtype = jnp.float32,
