@@ -14,7 +14,8 @@ from ResNet import ResNet50, ResNet18, ResNet34
 # Dataset
 from dataloaders import cifar10
 from ResNetTrainer import ResNetTrainer
-from TrainerModule import TrainState
+from TrainerModule import TrainerModule
+from VeloTrainerModule import VeloTrainerModule
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -31,6 +32,7 @@ def parse_args():
         help="the number of epochs to train for")
     parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
         help="the resnet backbone to train")
+    parser.add_argument("--optimizer", type=str, default='velo', choices=['adamw', 'sgd', 'adamw', 'velo'])
     
     return parser.parse_args()
 
@@ -45,6 +47,11 @@ if __name__ == '__main__':
         model = ResNet50
     else:
         Exception(f"Model {args.model} is not supported. Please choose from resnet18, resnet34, or resnet50")
+    
+    if args.optimizer == 'velo':
+        ResNetTrainer.__bases__ = (VeloTrainerModule,)
+    else:
+        ResNetTrainer.__bases__ = (TrainerModule,)
     
     model.__name__ = args.model
     trainer = ResNetTrainer(model,
