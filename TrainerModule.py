@@ -130,7 +130,6 @@ class TrainerModule:
             wandb.init(
                 project=logger_params['wandb_project_name'],
                 entity=logger_params['wandb_entity'],
-                sync_tensorboard=True,
                 config=self.config, # Save all hyperparameters
                 name=self.run_name
             )
