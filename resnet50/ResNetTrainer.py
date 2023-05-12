@@ -10,16 +10,12 @@ from TrainerModule import TrainerModule
 from VeloTrainerModule import VeloTrainerModule
 import optax
 
-# Models
-from ResNet import ResNet50
-ResNet50.__name__ = 'ResNet50'
-
 class ResNetTrainer(TrainerModule):
-    def __init__(self,
+    def __init__(self, model_class,
                  num_classes : int,
                  dtype : jnp.dtype = jnp.float32,
                  **kwargs):
-        super().__init__(model_class=ResNet50,
+        super().__init__(model_class=model_class,
                          model_hparams={
                              'num_classes': num_classes,
                              'dtype': dtype

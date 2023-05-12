@@ -9,13 +9,11 @@ import argparse
 from jax import random
 import flax.linen as nn
 import jax.numpy as jnp
-from ResNet import ResNet50
+from ResNet import ResNet50, ResNet18, ResNet34
 
 # Dataset
 from dataloaders import cifar10
-
 from ResNetTrainer import ResNetTrainer
-
 from TrainerModule import TrainState
 
 def parse_args():
@@ -31,14 +29,26 @@ def parse_args():
     # An epoch is 351 steps for CIFAR-10 with 45K training samples and a batch size of 128. Therefore, 150 epochs is 52,650 total gradient updates
     parser.add_argument("--epochs", type=int, default=150,
         help="the number of epochs to train for")
+    parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
+        help="the resnet backbone to train")
     
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
     train_loader, val_loader, test_loader = cifar10.get_data(args.batch_size)
-
-    trainer = ResNetTrainer(num_classes = 10,                    
+    if args.model =='resnet18':
+        model = ResNet18
+    elif args.model == 'resnet34':
+        model = ResNet34
+    elif args.model == 'resnet50':
+        model = ResNet50
+    else:
+        Exception(f"Model {args.model} is not supported. Please choose from resnet18, resnet34, or resnet50")
+    
+    model.__name__ = args.model
+    trainer = ResNetTrainer(model,
+                            num_classes = 10,                    
                             optimizer_hparams={
                                 'optimizer': 'adam',
                                 'lr': 1e-3
