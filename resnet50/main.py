@@ -32,7 +32,7 @@ def parse_args():
         help="the number of epochs to train for")
     parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
         help="the resnet backbone to train")
-    parser.add_argument("--optimizer", type=str, default='velo', choices=['adamw', 'sgd', 'adamw', 'velo'])
+    parser.add_argument("--optimizer", type=str, default='velo', choices=['adam', 'sgd', 'adamw', 'velo'])
     
     return parser.parse_args()
 
