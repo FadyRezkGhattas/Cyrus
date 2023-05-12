@@ -22,9 +22,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=128,
         help="the number of samples per mini-batches")
-    parser.add_argument("--wandb-project-name", type=str, default="cleanRL",
+    parser.add_argument("--wandb-project-name", type=str, default="resnet_cifar10",
         help="the wandb's project name")
-    parser.add_argument("--wandb-entity", type=str, default=None,
+    parser.add_argument("--wandb-entity", type=str, default='fastautomate',
         help="the entity (team) of wandb's project")
     parser.add_argument("--validate-after-n-epochs", type=int, default=5,
         help="the number of epochs after which validation is run")
