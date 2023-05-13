@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
         help="the resnet backbone to train")
     parser.add_argument("--optimizer", type=str, default='velo', choices=['adam', 'sgd', 'adamw', 'velo'])
-    parser.add_argument("--weight_decay", type=float, default=0, help="The total loss will be loss + 0.5 * weight_decay * l2-param-norm")
+    parser.add_argument("--weight-decay", type=float, default=0, help="The total loss will be loss + 0.5 * weight_decay * l2-param-norm")
     parser.add_argument("-add-weight-decay", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="If toggled, the weight decay will be added to the loss producing loss = loss + 0.5 * weight_decay * l2-param-norm.")
     
