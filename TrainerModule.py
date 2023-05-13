@@ -110,7 +110,7 @@ class TrainerModule:
         # Set experiment name
         model = self.config["model_class"]
         regularization = 'l2reg' if self.add_l2reg and self.optimizer_hparams['weight_decay'] > 0 else 'basic-loss'
-        self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{self.seed}"
+        self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{kwargs['extra_args'].batch_size}__{self.seed}"
 
         # Create empty model. Note: no parameters yet
         self.model = self.model_class(**self.model_hparams)
