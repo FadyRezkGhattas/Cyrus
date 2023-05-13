@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
         help="the resnet backbone to train")
     parser.add_argument("--optimizer", type=str, default='velo', choices=['adam', 'sgd', 'adamw', 'velo'])
-    parser.add_argument("--l2reg-weight", type=float, default=0, help="The total loss will be loss + 0.5 * l2reg-weight * l2-param-norm")
+    parser.add_argument("--weight_decay", type=float, default=0, help="The total loss will be loss + 0.5 * weight_decay * l2-param-norm")
     
     return parser.parse_args()
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
                             optimizer_hparams={
                                 'optimizer': 'adam',
                                 'lr': 1e-3,
-                                'l2reg-weight': args.l2reg_weight
+                                'weight_decay': args.weight_decay
                             },
                             logger_params={
                                 'track': True,

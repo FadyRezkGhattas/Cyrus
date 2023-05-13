@@ -107,7 +107,7 @@ class TrainerModule:
         self.config.update(kwargs)
         # Set experiment name
         model = self.config["model_class"]
-        regularization = 'l2reg' if self.optimizer_hparams['l2reg-weight'] > 0 else 'basic-loss'
+        regularization = 'l2reg' if self.optimizer_hparams['weight_decay'] > 0 else 'basic-loss'
         self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{self.seed}"
 
         # Create empty model. Note: no parameters yet
@@ -215,7 +215,8 @@ class TrainerModule:
         transf = [optax.clip_by_global_norm(hparams.pop('gradient_clip', 1.0))]
         if opt_class == optax.sgd and 'weight_decay' in hparams:  # wd is integrated in adamw
             transf.append(optax.add_decayed_weights(hparams.pop('weight_decay', 0.0)))
-        
+        if opt_class != optax.adamw and 'weight_decay in hparams':
+            hparams.pop('weight_decay', 0.0)
         optimizer = optax.chain(
             *transf,
             opt_class(lr_schedule, **hparams)

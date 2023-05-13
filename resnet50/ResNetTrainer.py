@@ -22,7 +22,7 @@ class ResNetTrainer(TrainerModule):
                              'dtype': dtype
                          },
                          **kwargs)
-        self.l2reg = kwargs['optimizer_hparams']['l2reg-weight']
+        self.l2reg = kwargs['optimizer_hparams']['weight_decay']
     
     def create_functions(self):
         def loss_function(params, batch_stats, batch, train):
