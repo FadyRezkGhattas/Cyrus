@@ -2,7 +2,7 @@ import sys
 import os.path
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(parent_dir)
-
+from distutils.util import strtobool
 import argparse
 
 # Jax and Flax
@@ -36,6 +36,8 @@ def parse_args():
         help="the resnet backbone to train")
     parser.add_argument("--optimizer", type=str, default='velo', choices=['adam', 'sgd', 'adamw', 'velo'])
     parser.add_argument("--weight_decay", type=float, default=0, help="The total loss will be loss + 0.5 * weight_decay * l2-param-norm")
+    parser.add_argument("-add-weight-decay", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="If toggled, the weight decay will be added to the loss producing loss = loss + 0.5 * weight_decay * l2-param-norm.")
     
     return parser.parse_args()
 
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     elif args.model == 'resnet50':
         model = ResNet50
     else:
-        Exception(f"Model {args.model} is not supported. Please choose from resnet18, resnet34, or resnet50")
+        raise Exception(f"Model {args.model} is not supported. Please choose from resnet18, resnet34, or resnet50")
     
     if args.optimizer == 'velo':
         ResNetTrainer.__bases__ = (VeloTrainerModule,)
@@ -61,7 +63,7 @@ if __name__ == '__main__':
                             seed = args.seed,
                             num_classes = 10,                    
                             optimizer_hparams={
-                                'optimizer': 'adam',
+                                'optimizer': args.optimizer,
                                 'lr': 1e-3,
                                 'weight_decay': args.weight_decay
                             },

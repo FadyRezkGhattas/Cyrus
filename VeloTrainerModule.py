@@ -52,6 +52,10 @@ class VeloTrainerModule(TrainerModule):
                  **kwargs)
     
     def init_optimizer(self, num_epochs : int, num_steps_per_epoch : int):
+        if not self.add_l2reg and self.optimizer_hparams['weight_decay'] > 0:
+            raise Exception("""Add L2 regularization flag is off but weight decay is passed.
+                      Weight decay is not utilized with VeLO.
+                      If this is the intended behaviour, then set weight decay to zero.""")
         # Initialize frozen VeLO
         NUM_STEPS = num_epochs * num_steps_per_epoch
         opt = prefab.optax_lopt(NUM_STEPS)

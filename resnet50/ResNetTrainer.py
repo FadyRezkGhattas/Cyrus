@@ -22,7 +22,6 @@ class ResNetTrainer(TrainerModule):
                              'dtype': dtype
                          },
                          **kwargs)
-        self.l2reg = kwargs['optimizer_hparams']['weight_decay']
     
     def create_functions(self):
         def loss_function(params, batch_stats, batch, train):
@@ -33,8 +32,9 @@ class ResNetTrainer(TrainerModule):
                                     mutable=['batch_stats'] if train else False)
             logits, new_model_state = output if train else (output, None)
             loss = optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
-            sqnorm = tree_util.tree_l2_norm(params, squared=True)
-            loss = loss + 0.5 * self.l2reg * sqnorm
+            if self.add_l2reg:
+                sqnorm = tree_util.tree_l2_norm(params, squared=True)
+                loss = loss + 0.5 * self.optimizer_hparams['weight_decay'] * sqnorm
             acc = (logits.argmax(axis=-1) == labels).mean()
             return loss, (new_model_state, acc)
         

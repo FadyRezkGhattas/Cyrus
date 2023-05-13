@@ -10,6 +10,7 @@ from copy import copy
 from glob import glob
 from collections import defaultdict
 import dataclasses as dc
+import warnings
 
 # JAX/Flax
 import jax
@@ -93,6 +94,7 @@ class TrainerModule:
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.exmp_input = exmp_input
         self.optimizer_name = self.optimizer_hparams.pop('optimizer', 'adamw')
+        self.add_l2reg = kwargs['extra_args'].add_weight_decay
         # Set of hyperparameters to save
         self.config = dict({
             'model_class': model_class.__name__,
@@ -107,7 +109,7 @@ class TrainerModule:
         self.config.update(kwargs)
         # Set experiment name
         model = self.config["model_class"]
-        regularization = 'l2reg' if self.optimizer_hparams['weight_decay'] > 0 else 'basic-loss'
+        regularization = 'l2reg' if self.add_l2reg and self.optimizer_hparams['weight_decay'] > 0 else 'basic-loss'
         self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{self.seed}"
 
         # Create empty model. Note: no parameters yet
@@ -188,6 +190,15 @@ class TrainerModule:
             num_steps_per_epoch (int): Number of training steps per epoch.
         """
         hparams = copy(self.optimizer_hparams)
+            
+        if self.add_l2reg and self.optimizer_hparams['weight_decay'] != 0:
+            raise Exception(f'''The current optimizer is {self.optimizer_name} and weight decay is {self.optimizer_hparams['weight_decay']}.
+            The add_l2reg flag is on. This flag is intended for use with VeLO only. When toggled the L2 norm is added manually to the loss.
+            If this is toggled with other optimizers, the L2 norm will be duplicated (once in the loss and once with otpax.chain).''')
+
+        if self.optimizer_name == 'adam' and self.optimizer_hparams['weight_decay'] != 0:
+            warnings.warn(f'''WARNING: The current optimizer is {self.optimizer_name} and weight decay is {self.optimizer_hparams['weight_decay']}.
+            optax Adam optimizer does not take weight decay as input. The weight decay value will be ignored.''')
 
         # Initialize optimizer
         if self.optimizer_name.lower() == 'adam':
@@ -215,8 +226,11 @@ class TrainerModule:
         transf = [optax.clip_by_global_norm(hparams.pop('gradient_clip', 1.0))]
         if opt_class == optax.sgd and 'weight_decay' in hparams:  # wd is integrated in adamw
             transf.append(optax.add_decayed_weights(hparams.pop('weight_decay', 0.0)))
-        if opt_class != optax.adamw and 'weight_decay in hparams':
-            hparams.pop('weight_decay', 0.0)
+        
+        # Weight decay can only be passed to AdamW and SGD
+        if opt_class != optax.adamw and 'weight_decay' in hparams:
+            hparams.pop('weight_decay')
+        
         optimizer = optax.chain(
             *transf,
             opt_class(lr_schedule, **hparams)
