@@ -93,7 +93,7 @@ class TrainerModule:
         self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.exmp_input = exmp_input
-        self.optimizer_name = self.optimizer_hparams.pop('optimizer', 'adamw')
+        self.optimizer_name = self.optimizer_hparams['optimizer']
         self.add_l2reg = kwargs['extra_args'].add_weight_decay
         # Set of hyperparameters to save
         self.config = dict({
