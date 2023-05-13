@@ -107,7 +107,8 @@ class TrainerModule:
         self.config.update(kwargs)
         # Set experiment name
         model = self.config["model_class"]
-        self.run_name = f"{model}__{self.optimizer_name}__{self.seed}__{int(time.time())}"
+        regularization = 'l2reg' if self.optimizer_hparams['l2reg-weight'] > 0 else 'basic-loss'
+        self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{self.seed}"
 
         # Create empty model. Note: no parameters yet
         self.model = self.model_class(**self.model_hparams)
@@ -363,6 +364,8 @@ class TrainerModule:
         Returns:
             bool: True if the new model is better than the old one, and False otherwise.
         """
+        #TODO: this comparison is sensitive to how the metrics are named
+        # for now, maybe override this in inheriting classes?
         if old_metrics is None:
             return True
         for key, is_larger in [('val/val_metric', False), ('val/acc', True), ('val/loss', False)]:
