@@ -44,9 +44,8 @@ def autotag() -> str:
         wandb_tag = f"{git_tag}"
         print(f"identified git tag: {git_tag}")
     except subprocess.CalledProcessError:
-        return wandb_tag
+        pass
 
-    git_commit = subprocess.check_output(["git", "rev-parse", "--verify", "HEAD"]).decode("ascii").strip()
     try:
         # try finding the pull request number on github
         prs = requests.get(f"https://api.github.com/search/issues?q=repo:vwxyzjn/cleanrl+is:pr+{git_commit}")
@@ -60,7 +59,7 @@ def autotag() -> str:
     except Exception as e:
         print(e)
 
-    return wandb_tag
+    return subprocess.check_output(["git", "rev-parse", "--verify", "HEAD"]).decode("ascii").strip()
 
 
 if __name__ == "__main__":
