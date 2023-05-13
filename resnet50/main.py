@@ -19,6 +19,8 @@ from VeloTrainerModule import VeloTrainerModule
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=1,
+        help="seed of the experiment")
     parser.add_argument("--batch-size", type=int, default=128,
         help="the number of samples per mini-batches")
     parser.add_argument("--wandb-project-name", type=str, default="resnet_cifar10",
@@ -56,6 +58,7 @@ if __name__ == '__main__':
     
     model.__name__ = args.model
     trainer = ResNetTrainer(model,
+                            seed = args.seed,
                             num_classes = 10,                    
                             optimizer_hparams={
                                 'optimizer': 'adam',
