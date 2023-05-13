@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from TrainerModule import TrainerModule
 from VeloTrainerModule import VeloTrainerModule
 import optax
+from jaxopt._src import tree_util
 
 class ResNetTrainer(TrainerModule):
     def __init__(self, model_class,
@@ -21,6 +22,7 @@ class ResNetTrainer(TrainerModule):
                              'dtype': dtype
                          },
                          **kwargs)
+        self.l2reg = 1e-4
     
     def create_functions(self):
         def loss_function(params, batch_stats, batch, train):
@@ -31,6 +33,8 @@ class ResNetTrainer(TrainerModule):
                                     mutable=['batch_stats'] if train else False)
             logits, new_model_state = output if train else (output, None)
             loss = optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
+            sqnorm = tree_util.tree_l2_norm(params, squared=True)
+            loss = loss + 0.5 * self.l2reg * sqnorm
             acc = (logits.argmax(axis=-1) == labels).mean()
             return loss, (new_model_state, acc)
         
