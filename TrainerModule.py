@@ -368,7 +368,7 @@ class TrainerModule:
         # for now, maybe override this in inheriting classes?
         if old_metrics is None:
             return True
-        for key, is_larger in [('val/val_metric', False), ('val/acc', True), ('val/loss', False)]:
+        for key, is_larger in [('val/val_metric', False), ('val/loss', False)]:
             if key in new_metrics:
                 if is_larger:
                     return new_metrics[key] > old_metrics[key]
