@@ -450,7 +450,8 @@ if __name__ == '__main__':
 
         (agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
             update_epoch, (agent_state, key), (), length=args.update_epochs
-        )
+        ) #return the grads here if needed? If args.update_epochs is 4 and the minibatches are 4, then we have (4, 4, grads_shape)
+        # critic dense_0 bias is for example has shape of (4,4,1)
         return agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key
 
     # TRY NOT TO MODIFY: start the game
