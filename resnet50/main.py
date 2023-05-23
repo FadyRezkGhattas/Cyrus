@@ -9,7 +9,7 @@ import argparse
 from jax import random
 import flax.linen as nn
 import jax.numpy as jnp
-from ResNet import ResNet50, ResNet18, ResNet34
+from ResNet import ResNet50, ResNet18, ResNet34, _ResNet1
 
 # Dataset
 from dataloaders import cifar10
@@ -32,7 +32,7 @@ def parse_args():
     # An epoch is 351 steps for CIFAR-10 with 45K training samples and a batch size of 128. Therefore, 150 epochs is 52,650 total gradient updates
     parser.add_argument("--epochs", type=int, default=150,
         help="the number of epochs to train for")
-    parser.add_argument("--model", type=str, default='resnet18', choices=['resnet18', 'resnet34', 'resnet50'],
+    parser.add_argument("--model", type=str, default='resnet1', choices=['resnet1', 'resnet18', 'resnet34', 'resnet50'],
         help="the resnet backbone to train")
     parser.add_argument("--optimizer", type=str, default='velo', choices=['adam', 'sgd', 'adamw', 'velo'])
     parser.add_argument("--weight-decay", type=float, default=0, help="The total loss will be loss + 0.5 * weight_decay * l2-param-norm")
@@ -50,8 +50,10 @@ if __name__ == '__main__':
         model = ResNet34
     elif args.model == 'resnet50':
         model = ResNet50
+    elif args.model == 'resnet1':
+        model = _ResNet1
     else:
-        raise Exception(f"Model {args.model} is not supported. Please choose from resnet18, resnet34, or resnet50")
+        raise Exception(f"Model {args.model} is not supported. Please choose from resnet1, resnet18, resnet34, or resnet50")
     
     if args.optimizer == 'velo':
         ResNetTrainer.__bases__ = (VeloTrainerModule,)
