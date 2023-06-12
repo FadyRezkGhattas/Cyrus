@@ -173,3 +173,20 @@ class EpisodeStatistics:
     episode_lengths: jnp.array
     returned_episode_returns: jnp.array
     returned_episode_lengths: jnp.array
+
+def step_env_wrapped(episode_stats : EpisodeStatistics, handle, action, step_env):
+    handle, (next_obs, reward, terminated, truncated, info) = step_env(handle, action)
+    new_episode_return = episode_stats.episode_returns + info["reward"]
+    new_episode_length = episode_stats.episode_lengths + 1
+    episode_stats = episode_stats.replace(
+        episode_returns = (new_episode_return) * (1 - terminated) * (1 - truncated),
+        episode_lengths = (new_episode_length) * (1 - terminated) * (1 - truncated),
+        # only update the `returned_episode_returns` if the episode is done
+        returned_episode_returns=jnp.where(
+            terminated + truncated, new_episode_return, episode_stats.returned_episode_returns
+        ),
+        returned_episode_lengths=jnp.where(
+            terminated + truncated, new_episode_length, episode_stats.returned_episode_lengths
+        ),
+    )
+    return episode_stats, handle, (next_obs, reward, terminated, truncated, info)
