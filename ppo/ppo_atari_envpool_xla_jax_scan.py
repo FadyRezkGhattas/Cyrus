@@ -33,13 +33,12 @@ class VeloState(TrainState):
     def apply_gradients(self, *, grads, **kwargs):
         # Clipping gradients as implemented here: https://github.com/deepmind/optax/blob/master/optax/_src/clipping.py#L91
         # replicating logic to avoid editing the chain operation to accept extra_args as velo expects
-        if args.use_grad_norm:
-            g_norm = optax.global_norm(grads)
-            trigger = jnp.squeeze(g_norm < args.max_grad_norm)
-            chex.assert_shape(trigger, ())  # A scalar.
-            def clip_fn(t):
-                return jax.lax.select(trigger, t, (t / g_norm.astype(t.dtype)) * args.max_grad_norm)
-            grads = jax.tree_util.tree_map(clip_fn, grads)
+        g_norm = optax.global_norm(grads)
+        trigger = jnp.squeeze(g_norm < args.max_grad_norm)
+        chex.assert_shape(trigger, ())  # A scalar.
+        def clip_fn(t):
+            return jax.lax.select(trigger, t, (t / g_norm.astype(t.dtype)) * args.max_grad_norm)
+        grads = jax.tree_util.tree_map(clip_fn, grads)
     
         # Change update signature to pass loss as expected by VeLO
         updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
