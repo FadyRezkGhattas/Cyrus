@@ -54,6 +54,7 @@ class PPOTask():
         )
         self.handle, self.recv, self.send, self.step_env = self.envs.xla()
         assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+        self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
         # agent setup
         self.network = Network()
@@ -62,10 +63,10 @@ class PPOTask():
         self.params : AgentParams = None
 
         # Set Jitted Functions
-        self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
         self.network.apply = jax.jit(self.network.apply)
         self.actor.apply = jax.jit(self.actor.apply)
         self.critic.apply = jax.jit(self.critic.apply)
+        self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
 
         # TRY NOT TO MODIFY: start the game
         self.global_step = 0
@@ -246,9 +247,8 @@ class PPOTask():
         return agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key
 
     def rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
-        step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped) #TODO: step_env_wrapped to use episode_stats initialized in __init__?
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
-            step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps
+            self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
