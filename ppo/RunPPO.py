@@ -13,7 +13,7 @@ import chex
 from learned_optimization.research.general_lopt import prefab
 from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
-from common import *
+from baseline.common import *
 from PPOTask import *
 from VeLO import get_optax_velo
 
@@ -86,5 +86,6 @@ if __name__ == '__main__':
         tx=get_optax_velo(total_steps)
     )
 
-    for i in range(1000):
-        agent_state, key = ppo_task.update(agent_state, key)
+    start_time = time.time()
+    for update in range(1, args.num_updates + 1):
+        agent_state, key = ppo_task.update(agent_state, key, start_time)

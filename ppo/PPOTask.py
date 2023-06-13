@@ -17,11 +17,32 @@ import chex
 from learned_optimization.research.general_lopt import prefab
 from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
-from common import *
+from baseline.common import *
 
 class PPOTask():
     def __init__(self, args):
         self.args = args
+
+        # Tracking and Logging
+        use_velo = 'velo' if args.use_velo else 'adam'
+        self.run_name = f"{use_velo}__{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+        if args.track:
+            import wandb
+
+            wandb.init(
+                project=args.wandb_project_name,
+                entity=args.wandb_entity,
+                sync_tensorboard=True,
+                config=vars(args),
+                name=self.run_name,
+                monitor_gym=True,
+                save_code=True,
+            )
+        self.writer = SummaryWriter(f"runs/{self.run_name}")
+        self.writer.add_text(
+            "hyperparameters",
+            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
+        )
 
         # env setup
         self.envs = make_env(args.env_id, args.seed, args.num_envs)()
@@ -231,7 +252,8 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key):
+    def update(self, agent_state, key, start_time):
+        update_time_start = time.time()
         agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, storage, key, self.handle = self.rollout(
             agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, key, self.handle
         )
@@ -242,8 +264,26 @@ class PPOTask():
             key,
         )
 
+        self.global_step += self.args.num_steps * self.args.num_envs
         avg_episodic_return = np.mean(jax.device_get(self.episode_stats.returned_episode_returns))
-
         print(f"global_step={self.global_step}, avg_episodic_return={avg_episodic_return}")
+        
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        self.writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, self.global_step)
+        self.writer.add_scalar(
+            "charts/avg_episodic_length", np.mean(jax.device_get(self.episode_stats.returned_episode_lengths)), self.global_step
+        )
+        if not self.args.use_velo:
+            self.writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), self.global_step)
+        self.writer.add_scalar("losses/value_loss", v_loss[-1, -1].item(), self.global_step)
+        self.writer.add_scalar("losses/policy_loss", pg_loss[-1, -1].item(), self.global_step)
+        self.writer.add_scalar("losses/entropy", entropy_loss[-1, -1].item(), self.global_step)
+        self.writer.add_scalar("losses/approx_kl", approx_kl[-1, -1].item(), self.global_step)
+        self.writer.add_scalar("losses/loss", loss[-1, -1].item(), self.global_step)
+        print("SPS:", int(self.global_step / (time.time() - start_time)))
+        self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - start_time)), self.global_step)
+        self.writer.add_scalar(
+            "charts/SPS_update", int(self.args.num_envs * self.args.num_steps / (time.time() - update_time_start)), self.global_step
+        )
 
         return agent_state, key

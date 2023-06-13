@@ -13,8 +13,6 @@ import numpy as np
 import optax
 import chex
 from flax.linen.initializers import constant, orthogonal
-from flax.training.train_state import TrainState
-from common import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -74,7 +72,7 @@ def parse_args():
         help="the maximum norm for the gradient clipping")
     parser.add_argument("--target-kl", type=float, default=None,
         help="the target KL divergence threshold")
-    parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+    parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Repalce Adam optimiser with VeLO from learned optimization library")
     
     args = parser.parse_args()
