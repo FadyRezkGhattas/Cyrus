@@ -5,10 +5,6 @@ from functools import partial
 from typing import Any
 import dataclasses as dc
 
-import envpool
-import flax
-import flax.linen as nn
-import gym
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -19,6 +15,7 @@ from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
 from common import *
 from PPOTask import *
+from VeLO import get_optax_velo
 
 class VeloState(TrainState):
     # A simple extension of TrainState to also include batch statistics
@@ -86,7 +83,7 @@ if __name__ == '__main__':
     agent_state = VeloState.create(
         apply_fn=None,
         params=ppo_task.params,
-        tx=prefab.optax_lopt(total_steps)
+        tx=get_optax_velo(total_steps)
     )
 
     for i in range(1000):
