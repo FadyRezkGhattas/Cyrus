@@ -89,24 +89,6 @@ if __name__ == '__main__':
     )
     handle, recv, send, step_env = envs.xla()
 
-    # Wrao env.step to update the EpisodeStatistics
-    def step_env_wrapped(episode_stats : EpisodeStatistics, handle, action):
-        handle, (next_obs, reward, terminated, truncated, info) = step_env(handle, action)
-        new_episode_return = episode_stats.episode_returns + info["reward"]
-        new_episode_length = episode_stats.episode_lengths + 1
-        episode_stats = episode_stats.replace(
-            episode_returns = (new_episode_return) * (1 - terminated) * (1 - truncated),
-            episode_lengths = (new_episode_length) * (1 - terminated) * (1 - truncated),
-            # only update the `returned_episode_returns` if the episode is done
-            returned_episode_returns=jnp.where(
-                terminated + truncated, new_episode_return, episode_stats.returned_episode_returns
-            ),
-            returned_episode_lengths=jnp.where(
-                terminated + truncated, new_episode_length, episode_stats.returned_episode_lengths
-            ),
-        )
-        return episode_stats, handle, (next_obs, reward, terminated, truncated, info)
-
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
     # Linearly annealing the learning rate as used in the original OpenAI implementation for PPO: https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L133-L135 
@@ -325,7 +307,8 @@ if __name__ == '__main__':
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    rollout = partial(rollout, step_once_fn=partial(step_once, env_step_fn=step_env_wrapped), max_steps=args.num_steps)
+    step_env_wrapped_ = partial(step_env_wrapped, step_env=step_env)
+    rollout = partial(rollout, step_once_fn=partial(step_once, env_step_fn=step_env_wrapped_), max_steps=args.num_steps)
 
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
