@@ -88,13 +88,11 @@ class PPOTask():
         actor_params = self.actor.init(actor_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
         critic_params = self.critic.init(critic_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
 
-        self.params = AgentParams(
+        return AgentParams(
             network_params,
             actor_params,
             critic_params
-        )
-
-        return key
+        ), key
 
     def step_once(self, carry, step, env_step_fn):
         agent_state, episode_stats, obs, terminated, truncated, key, handle = carry
@@ -256,7 +254,7 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key, start_time):
+    def update(self, agent_state, key, start_time = time.time()):
         update_time_start = time.time()
         agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, storage, key, self.handle = self.rollout(
             agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, key, self.handle
@@ -290,4 +288,4 @@ class PPOTask():
             "charts/SPS_update", int(self.args.num_envs * self.args.num_steps / (time.time() - update_time_start)), self.global_step
         )
 
-        return agent_state, key
+        return agent_state, key, loss
