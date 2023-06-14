@@ -56,7 +56,7 @@ def short_segment_unroll(agent_state,
                          inner_problem_length,
                          on_iteration,
                          truncation_length, # truncation_length is the length of steps to take in in the inner problem before doing meta-updates
-                         ):
+                         start_time):
     """Run the ppo_task for a total of truncation_length. Each
      step increments on_iteration. if the on_iteration reaches inner_problem_length,
      the ppo_task and on_iteration are resetted. The unrolling continues with the new
@@ -75,8 +75,7 @@ def short_segment_unroll(agent_state,
     Returns:
         _type_: agent_state, ppo_task, key, on_iteration, losses
     """
-    #losses = np.array([])
-    start_time = time.time()
+    losses = np.array([])
     for i in range(truncation_length):
         # If we have trained for longer than total inner problem length, reset the inner problem.
         if on_iteration >= inner_problem_length:
@@ -95,7 +94,7 @@ def short_segment_unroll(agent_state,
         losses = np.append(losses, step_losses)
 
         on_iteration += 1
-    return agent_state, ppo_task, key, on_iteration, losses
+    return agent_state, ppo_task, key, on_iteration, losses, start_time
 
 
 if __name__ == '__main__':
@@ -118,5 +117,6 @@ if __name__ == '__main__':
 
     on_iteration = 0
     truncation_length = int(args.num_updates/args.num_meta_updates)
+    start_time = time.time()
     for update in range(10):
-        agent_state, ppo_task, key, on_iteration, losses = short_segment_unroll(agent_state, ppo_task, args, key, args.num_updates, on_iteration, truncation_length)
+        agent_state, ppo_task, key, on_iteration, losses, start_time = short_segment_unroll(agent_state, ppo_task, args, key, args.num_updates, on_iteration, truncation_length, start_time)
