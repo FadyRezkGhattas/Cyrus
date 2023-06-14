@@ -75,6 +75,10 @@ def parse_args():
     parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Repalce Adam optimiser with VeLO from learned optimization library")
     
+    # Finetuning specific arguments
+    parser.add_argument("--num-meta-updates", type=int, default=100,
+        help="total number of meta-parameter updates to take")
+    
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
