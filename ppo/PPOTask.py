@@ -44,21 +44,12 @@ class PPOTask():
             "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
 
-        # env setup
-        self.envs = make_env(args.env_id, args.seed, args.num_envs)()
-        self.episode_stats = EpisodeStatistics(
-            episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-            episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-            returned_episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-            returned_episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-        )
-        self.handle, self.recv, self.send, self.step_env = self.envs.xla()
-        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
-        self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
+        # temp environment for getting observation/action spaces
+        envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
 
         # agent setup
         self.network = Network()
-        self.actor = Actor(action_dim=self.envs.single_action_space.n)
+        self.actor = Actor(action_dim=envs.single_action_space.n)
         self.critic = Critic()
         self.params : AgentParams = None
 
@@ -68,29 +59,40 @@ class PPOTask():
         self.critic.apply = jax.jit(self.critic.apply)
         self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
 
-        # TRY NOT TO MODIFY: start the game
-        self.global_step = 0
-        self.start_time = time.time()
-        self.next_obs, info = self.envs.reset()
-        self.terminated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
-        self.truncated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
-
         # Tracked metrics
         self.global_step = 0
 
     def init(self, key):
+        # Initialize Envs
+        self.envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
+        self.episode_stats = EpisodeStatistics(
+            episode_returns=jnp.zeros(self.args.num_envs, dtype=jnp.float32),
+            episode_lengths=jnp.zeros(self.args.num_envs, dtype=jnp.int32),
+            returned_episode_returns=jnp.zeros(self.args.num_envs, dtype=jnp.float32),
+            returned_episode_lengths=jnp.zeros(self.args.num_envs, dtype=jnp.int32),
+        )
+        self.handle, self.recv, self.send, self.step_env = self.envs.xla()
+        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+        self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
+
+        # TRY NOT TO MODIFY: start the game
+        self.global_step = 0
+        self.start_time = time.time()
+        self.next_obs, info = self.envs.reset()
+        self.terminated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
+        self.truncated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
+        
+        # Initialize Agent
         key, network_key, actor_key, critic_key = jax.random.split(key, 4)
         network_params = self.network.init(network_key, np.array([self.envs.single_observation_space.sample()]))
         actor_params = self.actor.init(actor_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
         critic_params = self.critic.init(critic_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
 
-        self.params = AgentParams(
+        return AgentParams(
             network_params,
             actor_params,
             critic_params
-        )
-
-        return key
+        ), key
 
     def step_once(self, carry, step, env_step_fn):
         agent_state, episode_stats, obs, terminated, truncated, key, handle = carry
@@ -252,7 +254,7 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key, start_time):
+    def update(self, agent_state, key, start_time = time.time()):
         update_time_start = time.time()
         agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, storage, key, self.handle = self.rollout(
             agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, key, self.handle
@@ -286,4 +288,4 @@ class PPOTask():
             "charts/SPS_update", int(self.args.num_envs * self.args.num_steps / (time.time() - update_time_start)), self.global_step
         )
 
-        return agent_state, key
+        return agent_state, key, loss

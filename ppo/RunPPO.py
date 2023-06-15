@@ -51,25 +51,6 @@ class VeloState(TrainState):
 
 if __name__ == '__main__':
     args = parse_args()
-    use_velo = 'velo' if args.use_velo else 'adam'
-    run_name = f"{use_velo}__{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-    if args.track:
-        import wandb
-
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True,
-        )
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -77,15 +58,15 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(args.seed)
 
     ppo_task = PPOTask(args)
-    key = ppo_task.init(key)
+    params, key = ppo_task.init(key)
 
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
     agent_state = VeloState.create(
         apply_fn=None,
-        params=ppo_task.params,
+        params=params,
         tx=get_optax_velo(total_steps)
     )
 
     start_time = time.time()
     for update in range(1, args.num_updates + 1):
-        agent_state, key = ppo_task.update(agent_state, key, start_time)
+        agent_state, key, loss = ppo_task.update(agent_state, key, start_time)
