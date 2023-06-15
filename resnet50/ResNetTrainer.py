@@ -34,7 +34,7 @@ class ResNetTrainer(TrainerModule):
             loss = optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
             if self.add_l2reg:
                 sqnorm = tree_util.tree_l2_norm(params, squared=True)
-                loss = loss + 0.5 * self.optimizer_hparams['weight_decay'] * sqnorm
+                loss = loss + self.optimizer_hparams['weight_decay'] * sqnorm
             acc = (logits.argmax(axis=-1) == labels).mean()
             return loss, (new_model_state, acc)
         
