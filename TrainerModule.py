@@ -104,8 +104,7 @@ class TrainerModule:
             'enable_progress_bar': self.enable_progress_bar,
             'debug': self.debug,
             'check_val_every_n_epoch': check_val_every_n_epoch,
-            'seed': self.seed,
-            'args': self
+            'seed': self.seed
         })
         self.config.update(kwargs)
         # Set experiment name
