@@ -299,7 +299,6 @@ class TrainerModule:
         # Training loop
         for epoch_idx in self.tracker(range(1, num_epochs+1), desc='Epochs'):
             train_metrics = self.train_epoch(train_loader)
-            break
             self.log(train_metrics, step=epoch_idx)
             self.on_training_epoch_end(epoch_idx)
             # Validation every N epochs
