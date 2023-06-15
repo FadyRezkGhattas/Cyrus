@@ -75,27 +75,55 @@ def short_segment_unroll(agent_state,
     Returns:
         _type_: agent_state, ppo_task, key, on_iteration, losses
     """
-    losses = np.array([])
-    for i in range(truncation_length):
-        # If we have trained for longer than total inner problem length, reset the inner problem.
-        if on_iteration >= inner_problem_length:
-            key1, key = jax.random.split(key)
-            ppo_task = PPOTask(args)
-            params, key = ppo_task.init(key)
-            agent_state = VeloState.create(apply_fn=None, params=params, tx=agent_state.tx)
-            on_iteration = 0
+    def step(carry, step):
+            agent_state, key, on_iteration, start_time = carry
+            def reset_problem(k, agent_state):
+                key1, key = jax.random.split(k)
+                params, key = ppo_task.reinitialize_agent_params(key)
+                agent_state = VeloState.create(apply_fn=None, params=params, tx=agent_state.tx)
+                return agent_state
+            
+            # If we have trained for longer than total inner problem length, reset the inner problem.
+            jax.debug.print('on_iteration {oi}', oi=on_iteration)
+            agent_state, on_iteration = jax.lax.cond(on_iteration >= inner_problem_length,
+                        lambda k, agent_state: (reset_problem(k, agent_state), 0),
+                        lambda k, agent_state: (agent_state, on_iteration),
+                        key, agent_state)
+            
+            # Optimizer Application to RL Agent
+            agent_state, key, step_losses = ppo_task.update(agent_state, key, start_time)
+
+            # clip the loss to prevent diverging inner models
+            step_losses = jnp.array(step_losses.flatten())
+            cutoff = jnp.full_like(step_losses, 3.0, np.float64)
+            step_losses = jnp.where(jnp.isnan(step_losses), cutoff, step_losses)
+
+            on_iteration += 1
         
-        agent_state, key, step_losses = ppo_task.update(agent_state, key, start_time)
+            return (agent_state, key, on_iteration, start_time), step_losses
+        
+    (agent_state, key, on_iteration, start_time), losses = jax.lax.scan(step, (agent_state, key, on_iteration, start_time), (), length=truncation_length)
+    return agent_state, key, on_iteration, start_time, losses
 
-        # clip the loss to prevent diverging inner models
-        step_losses = np.array(step_losses.flatten())
-        cutoff = np.full_like(step_losses, 3.0, np.float64)
-        step_losses = jnp.where(jnp.isnan(step_losses), cutoff, step_losses)
-        losses = np.append(losses, step_losses)
-
-        on_iteration += 1
-    return agent_state, ppo_task, key, on_iteration, losses, start_time
-
+#@jax.jit(static_argnames=('ppo_tasks'))
+def vec_short_segmnet_unroll(agent_states,
+                             ppo_tasks,
+                             args,
+                             keys,
+                             inner_problem_length,
+                             on_iterations,
+                             truncation_length,
+                             start_times):
+    agent_states, ppo_tasks, keys, on_iterations, losses, start_times = jax.vmap(short_segment_unroll,
+             in_axes=(0, 0, None, 0, None, 0, None, 0))(agent_states,
+                                                           ppo_tasks,
+                                                           args,
+                                                           keys,
+                                                           inner_problem_length,
+                                                           on_iterations,
+                                                           truncation_length,
+                                                           start_times)
+    return agent_states, ppo_tasks, keys, on_iterations, jnp.mean(losses), start_times
 
 if __name__ == '__main__':
     args = parse_args()
@@ -119,4 +147,4 @@ if __name__ == '__main__':
     truncation_length = int(args.num_updates/args.num_meta_updates)
     start_time = time.time()
     for update in range(10):
-        agent_state, ppo_task, key, on_iteration, losses, start_time = short_segment_unroll(agent_state, ppo_task, args, key, args.num_updates, on_iteration, truncation_length, start_time)
+        agent_states, ppo_tasks, keys, on_iterations, losses, start_times = short_segment_unroll(agent_state, ppo_task, args, key, args.num_updates, on_iteration, truncation_length, start_time)

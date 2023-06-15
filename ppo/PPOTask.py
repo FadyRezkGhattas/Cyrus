@@ -83,6 +83,9 @@ class PPOTask():
         self.truncated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
         
         # Initialize Agent
+        return self.reinitialize_agent_params(key)
+
+    def reinitialize_agent_params(self, key):
         key, network_key, actor_key, critic_key = jax.random.split(key, 4)
         network_params = self.network.init(network_key, np.array([self.envs.single_observation_space.sample()]))
         actor_params = self.actor.init(actor_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
@@ -254,12 +257,12 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key, start_time = time.time()):
+    def update(self, agent_state, key, start_time):
         update_time_start = time.time()
         agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, storage, key, self.handle = self.rollout(
             agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, key, self.handle
         )
-        storage = self.compute_gae(agent_state, self.next_obs, np.logical_or(self.terminated, self.truncated), storage)
+        storage = self.compute_gae(agent_state, self.next_obs, jnp.logical_or(self.terminated, self.truncated), storage)
         agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
             agent_state,
             storage,
