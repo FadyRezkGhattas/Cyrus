@@ -339,10 +339,8 @@ class TrainerModule:
         start_time = time.time()
         for batch in self.tracker(train_loader, desc='Training', leave=False):
             self.state, step_metrics = self.train_step(self.state, batch)
-            jax.profiler.save_device_memory_profile("memory.prof")
             for key in step_metrics:
                 metrics['train/' + key] += step_metrics[key] / num_train_steps
-            break
         metrics = {key: metrics[key].item() for key in metrics}
         metrics['epoch_time'] = time.time() - start_time
         return metrics
