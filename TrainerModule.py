@@ -299,7 +299,6 @@ class TrainerModule:
         # Training loop
         for epoch_idx in self.tracker(range(1, num_epochs+1), desc='Epochs'):
             train_metrics = self.train_epoch(train_loader)
-            break
             self.log(train_metrics, step=epoch_idx)
             self.on_training_epoch_end(epoch_idx)
             # Validation every N epochs
@@ -340,10 +339,8 @@ class TrainerModule:
         start_time = time.time()
         for batch in self.tracker(train_loader, desc='Training', leave=False):
             self.state, step_metrics = self.train_step(self.state, batch)
-            jax.profiler.save_device_memory_profile("memory.prof")
             for key in step_metrics:
                 metrics['train/' + key] += step_metrics[key] / num_train_steps
-            break
         metrics = {key: metrics[key].item() for key in metrics}
         metrics['epoch_time'] = time.time() - start_time
         return metrics
