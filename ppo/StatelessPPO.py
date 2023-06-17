@@ -21,87 +21,43 @@ from baseline.common import *
 
 class PPOTask():
     args : Any = None
-    writer : SummaryWriter  = None
-    envs : Any = None
     network : Network = None
     actor : Actor = None
     critic : Critic = None
-    params : AgentParams = None
     ppo_loss_grad_fn : Any = None
-    episode_stats : EpisodeStatistics = None
-    handle : Any = None
-    recv : Any = None
-    send : Any = None
-    step_env : Any = None
     step_once_fn : Any = None
-    global_step : int = 0
+    global_step = 0
     start_time = time.time()
-    next_obs : Any = None
-    info : Any = None
-    terminated : Any = None
-    truncated : Any = None
     
     def init(self, key):
-        # Tracking and Logging
-        use_velo = 'velo' if self.args.use_velo else 'adam'
-        self.run_name = f"{use_velo}__{self.args.env_id}__{self.args.exp_name}__{self.args.seed}__{int(time.time())}"
-        if self.args.track:
-            import wandb
-
-            wandb.init(
-                project=self.args.wandb_project_name,
-                entity=self.args.wandb_entity,
-                sync_tensorboard=True,
-                config=vars(self.args),
-                name=self.run_name,
-                monitor_gym=True,
-                save_code=True,
-            )
-        self.writer = SummaryWriter(f"runs/{self.run_name}")
-        self.writer.add_text(
-            "hyperparameters",
-            "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
-        )
-
         # early environment initialization for getting observation/action spaces
-        self.envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
+        envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
+        handle, recv, send, self.step_env = envs.xla()
 
         # agent setup
         self.network = Network()
-        self.actor = Actor(action_dim=self.envs.single_action_space.n)
+        self.actor = Actor(action_dim=envs.single_action_space.n)
         self.critic = Critic()
         self.params : AgentParams = None
 
-        # Set Jitted Functions
+        # Set Jitted Functions and Partial Definitions
         self.network.apply = jax.jit(self.network.apply)
         self.actor.apply = jax.jit(self.actor.apply)
         self.critic.apply = jax.jit(self.critic.apply)
         self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
-
-        # Initialize Envs
-        self.episode_stats = EpisodeStatistics(
-            episode_returns=jnp.zeros(self.args.num_envs, dtype=jnp.float32),
-            episode_lengths=jnp.zeros(self.args.num_envs, dtype=jnp.int32),
-            returned_episode_returns=jnp.zeros(self.args.num_envs, dtype=jnp.float32),
-            returned_episode_lengths=jnp.zeros(self.args.num_envs, dtype=jnp.int32),
-        )
-        self.handle, self.recv, self.send, self.step_env = self.envs.xla()
-        assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
         self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
-        # TRY NOT TO MODIFY: start the game
-        self.next_obs, info = self.envs.reset()
-        self.terminated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
-        self.truncated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
-        
         # Initialize Agent
         return self.reinitialize_agent_params(key)
 
     def reinitialize_agent_params(self, key):
+        # early environment initialization for getting observation/action spaces
+        envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
+
         key, network_key, actor_key, critic_key = jax.random.split(key, 4)
-        network_params = self.network.init(network_key, np.array([self.envs.single_observation_space.sample()]))
-        actor_params = self.actor.init(actor_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
-        critic_params = self.critic.init(critic_key, self.network.apply(network_params, np.array([self.envs.single_observation_space.sample()])))
+        network_params = self.network.init(network_key, np.array([envs.single_observation_space.sample()]))
+        actor_params = self.actor.init(actor_key, self.network.apply(network_params, np.array([envs.single_observation_space.sample()])))
+        critic_params = self.critic.init(critic_key, self.network.apply(network_params, np.array([envs.single_observation_space.sample()])))
 
         return AgentParams(
             network_params,
@@ -269,12 +225,12 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key, start_time):
+    def update(self, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         update_time_start = time.time()
-        agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, storage, key, self.handle = self.rollout(
-            agent_state, self.episode_stats, self.next_obs, self.terminated, self.truncated, key, self.handle
+        agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
+            agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
-        storage = self.compute_gae(agent_state, self.next_obs, jnp.logical_or(self.terminated, self.truncated), storage)
+        storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
         agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
             agent_state,
             storage,
@@ -282,25 +238,9 @@ class PPOTask():
         )
 
         self.global_step += self.args.num_steps * self.args.num_envs
-        avg_episodic_return = np.mean(jax.device_get(self.episode_stats.returned_episode_returns))
+        avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
         print(f"global_step={self.global_step}, avg_episodic_return={avg_episodic_return}")
         
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        self.writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, self.global_step)
-        self.writer.add_scalar(
-            "charts/avg_episodic_length", np.mean(jax.device_get(self.episode_stats.returned_episode_lengths)), self.global_step
-        )
-        if not self.args.use_velo:
-            self.writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), self.global_step)
-        self.writer.add_scalar("losses/value_loss", v_loss[-1, -1].item(), self.global_step)
-        self.writer.add_scalar("losses/policy_loss", pg_loss[-1, -1].item(), self.global_step)
-        self.writer.add_scalar("losses/entropy", entropy_loss[-1, -1].item(), self.global_step)
-        self.writer.add_scalar("losses/approx_kl", approx_kl[-1, -1].item(), self.global_step)
-        self.writer.add_scalar("losses/loss", loss[-1, -1].item(), self.global_step)
-        print("SPS:", int(self.global_step / (time.time() - start_time)))
-        self.writer.add_scalar("charts/SPS", int(self.global_step / (time.time() - start_time)), self.global_step)
-        self.writer.add_scalar(
-            "charts/SPS_update", int(self.args.num_envs * self.args.num_steps / (time.time() - update_time_start)), self.global_step
-        )
+        print("SPS:", int(self.global_step / (time.time() - self.start_time)))
 
-        return agent_state, key, loss
+        return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss
