@@ -87,8 +87,7 @@ class PPOTask():
         )
         self.handle, self.recv, self.send, self.step_env = self.envs.xla()
         assert isinstance(self.envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
-        #self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
-        #self.step_env_wrapped = jax.jit(step_env_wrapped)
+        self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
         # TRY NOT TO MODIFY: start the game
         self.next_obs, info = self.envs.reset()
@@ -110,12 +109,11 @@ class PPOTask():
             critic_params
         ), key
 
-    @partial(jax.jit, static_argnums=(0,))
-    def step_once(self, carry, step):
+    def step_once(self, carry, step, env_step_fn):
         agent_state, episode_stats, obs, terminated, truncated, key, handle = carry
         action, logprob, value, key = self.get_action_and_value(agent_state, obs, key)
 
-        episode_stats, handle, (next_obs, reward, terminated, truncated, info) = step_env_wrapped(episode_stats, handle, action, self.step_env)
+        episode_stats, handle, (next_obs, reward, terminated, truncated, info) = env_step_fn(episode_stats, handle, action, self.step_env)
         storage = Storage(
             obs=obs,
             actions=action,
@@ -267,7 +265,7 @@ class PPOTask():
 
     def rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
-            self.step_once, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps
+            self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
