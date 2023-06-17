@@ -14,7 +14,7 @@ from learned_optimization.research.general_lopt import prefab
 from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
-from StatelessPPO import *
+from PPOTask import *
 from VeLO import get_optax_velo
 
 class VeloState(TrainState):
@@ -49,6 +49,33 @@ class VeloState(TrainState):
             **kwargs
         )
 
+def make_env_vmap(env_id, seed, num_envs, key=None):
+    envs = envpool.make(
+        env_id,
+        env_type="gym",
+        num_envs=num_envs,
+        episodic_life=True,
+        reward_clip=True,
+        seed=seed
+    )
+    envs.num_envs = num_envs
+    envs.single_action_space = envs.action_space
+    envs.single_observation_space = envs.observation_space
+    envs.is_vector_env = True
+    handle, recv, send, step_env = envs.xla()
+    next_obs, info = envs.reset()
+    terminated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
+    truncated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
+
+    episode_stats = EpisodeStatistics(
+                episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
+                episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
+                returned_episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
+                returned_episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
+            )
+
+    return next_obs, terminated, truncated, handle, episode_stats
+
 if __name__ == '__main__':
     args = parse_args()
 
@@ -58,22 +85,9 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(args.seed)
 
     # Init env
-    envs = make_env(args.env_id, args.seed, args.num_envs)()
-    handle, recv, send, step_env = envs.xla()
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
-    # TRY NOT TO MODIFY: start the game
-    next_obs, info = envs.reset()
-    terminated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
-    truncated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
+    keys = jax.random.split(key, 2)
+    next_obs, terminated, truncated, handle, episode_stats = jax.vmap(make_env_vmap, in_axes=(None, None, None, 0))(args.env_id, args.seed, args.num_envs, keys)
 
-    # Data Containers
-    episode_stats = EpisodeStatistics(
-                episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-                episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-                returned_episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-                returned_episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-            )
-    
     # Init PPO
     ppo_task = PPOTask()
     ppo_task.args = args
@@ -90,7 +104,8 @@ if __name__ == '__main__':
     global_step = 0
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
-        agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl = ppo_task.update(agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        #agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl = 
+        ppo_task.update(agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         global_step += args.num_steps * args.num_envs
         avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
