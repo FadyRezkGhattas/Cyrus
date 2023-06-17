@@ -26,7 +26,6 @@ class PPOTask():
     critic : Critic = None
     ppo_loss_grad_fn : Any = None
     step_once_fn : Any = None
-    global_step = 0
     start_time = time.time()
     
     def init(self, key):
@@ -226,21 +225,16 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     def update(self, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
-        update_time_start = time.time()
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
+        
         storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
+
         agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
             agent_state,
             storage,
             key,
         )
 
-        self.global_step += self.args.num_steps * self.args.num_envs
-        avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
-        print(f"global_step={self.global_step}, avg_episodic_return={avg_episodic_return}")
-        
-        print("SPS:", int(self.global_step / (time.time() - self.start_time)))
-
-        return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss
+        return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl
