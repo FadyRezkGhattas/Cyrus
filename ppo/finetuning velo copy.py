@@ -2,7 +2,7 @@ import random
 import time
 from distutils.util import strtobool
 from functools import partial
-from typing import Any
+from typing import Any, Generic, TypeVar
 import dataclasses as dc
 
 import jax
@@ -16,6 +16,20 @@ from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 from PPOTask import *
 from VeLO import get_optax_velo
+
+_T = TypeVar('_T')
+
+class RefHolder(Generic[_T]):
+    def __init__(self, value: _T):
+        self.value = value
+
+def _refholder_flatten(self):
+    return (), self.value
+
+def _refholder_unflatten(value, _):
+    return RefHolder(value)
+
+jax.tree_util.register_pytree_node(RefHolder, _refholder_flatten, _refholder_unflatten)
 
 class VeloState(TrainState):
     # A simple extension of TrainState to also include batch statistics
@@ -134,26 +148,57 @@ def short_segment_unroll_(agent_state,
         (agent_state, key, on_iteration, start_time), losses = jax.lax.scan(step, (agent_state, key, on_iteration, start_time), (), length=truncation_length)
         return agent_state, key, on_iteration, start_time, losses
 
+#@partial(jax.jit, static_argnames=('ppo_tasks'))
+def vec_short_segment_unroll(agent_states,
+                             ppo_tasks,
+                             args,
+                             keys,
+                             inner_problem_length,
+                             on_iterations,
+                             truncation_length,
+                             start_times):
+    agent_states, ppo_tasks, keys, on_iterations, losses, start_times = jax.vmap(short_segment_unroll,
+             in_axes=(0, 0, None, 0, None, 0, None, 0))(agent_states,
+                                                           ppo_tasks,
+                                                           args,
+                                                           keys,
+                                                           inner_problem_length,
+                                                           on_iterations,
+                                                           truncation_length,
+                                                           start_times)
+    return agent_states, ppo_tasks, keys, on_iterations, jnp.mean(losses), start_times
+
+
 if __name__ == '__main__':
     args = parse_args()
-
+    num_tasks = 2
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
 
-    ppo_task = PPOTask(args)
-    params, key = ppo_task.init(key)
+    
 
-    total_steps = args.num_updates * args.update_epochs * args.num_minibatches
-    agent_state = VeloState.create(
-        apply_fn=None,
-        params=params,
-        tx=get_optax_velo(total_steps)
-    )
+    def init_single_problem(key):
+        ppo_task = PPOTask()
+        ppo_task.args = args
+        params, key = ppo_task.init(key)
 
-    on_iteration = 0
+        total_steps = args.num_updates * args.update_epochs * args.num_minibatches
+        agent_state = VeloState.create(
+            apply_fn=None,
+            params=params,
+            tx=get_optax_velo(total_steps)
+        )
+
+        return RefHolder(ppo_task), agent_state, key
+
+    keys = jax.random.split(key, num_tasks)
+    ppo_tasks, agent_states, keys = jax.vmap(init_single_problem)(keys)
+
+    on_iterations = jax.random.randint(key, [num_tasks], 0, args.num_updates)
+
     truncation_length = int(args.num_updates/args.num_meta_updates)
     start_time = time.time()
     for update in range(10):
-        agent_state, key, on_iteration, start_time, losses = short_segment_unroll_(agent_state, ppo_task, key, args.num_updates, on_iteration, truncation_length, start_time)
+        agent_state, key, on_iteration, start_time, losses = vec_short_segment_unroll(agent_states, ppo_tasks, args, keys, args.num_updates, on_iterations=on_iterations, truncation_length=truncation_length, start_times=start_time)
