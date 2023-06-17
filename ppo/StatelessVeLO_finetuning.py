@@ -85,30 +85,25 @@ if __name__ == '__main__':
     key = jax.random.PRNGKey(args.seed)
 
     # Init env
-    keys = jax.random.split(key, 2)
+    # note: all environments are initialized to the same state. what will differ is the agent parameters working with the different environments
+    keys = jax.random.split(key, 4) #TODO: change to population size
     next_obs, terminated, truncated, handle, episode_stats = jax.vmap(make_env_vmap, in_axes=(None, None, None, 0))(args.env_id, args.seed, args.num_envs, keys)
 
     # Init PPO
     ppo_task = PPOTask()
     ppo_task.args = args
-    params, key = ppo_task.init(key)
+    params, keys = jax.vmap(ppo_task.init)(keys)
 
-    total_steps = args.num_updates * args.update_epochs * args.num_minibatches
-    agent_state = VeloState.create(
-        apply_fn=None,
-        params=params,
-        tx=get_optax_velo(total_steps)
-    )
+    def init_velo_state(agent_params):
+        total_steps = args.num_updates * args.update_epochs * args.num_minibatches
+        return VeloState.create(
+            apply_fn=None,
+            params=agent_params,
+            tx=get_optax_velo(total_steps)
+        )
+    velo_states = jax.vmap(init_velo_state)(params)
 
-    start_time = time.time()
-    global_step = 0
-    for update in range(1, args.num_updates + 1):
-        update_time_start = time.time()
-        #agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl = 
-        ppo_task.update(agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
-
-        global_step += args.num_steps * args.num_envs
-        avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
-        print(f"global_step={global_step}, avg_episodic_return={avg_episodic_return}")
-        print("SPS:", int(global_step / (time.time() - start_time)))
-       
+    def debug(velo_state):
+        jax.debug.print("this is loss {l}", l=velo_state.params.actor_params)
+    
+    jax.vmap(debug)(velo_states)
