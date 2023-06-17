@@ -57,7 +57,8 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     key = jax.random.PRNGKey(args.seed)
 
-    ppo_task = PPOTask(args)
+    ppo_task = PPOTask()
+    ppo_task.args = args
     params, key = ppo_task.init(key)
 
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches

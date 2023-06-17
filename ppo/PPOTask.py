@@ -20,20 +20,39 @@ from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 
 class PPOTask():
-    def __init__(self, args):
-        self.args = args
-
+    args : Any = None
+    writer : SummaryWriter  = None
+    envs : Any = None
+    network : Network = None
+    actor : Actor = None
+    critic : Critic = None
+    params : AgentParams = None
+    ppo_loss_grad_fn : Any = None
+    episode_stats : EpisodeStatistics = None
+    handle : Any = None
+    recv : Any = None
+    send : Any = None
+    step_env : Any = None
+    step_once_fn : Any = None
+    global_step : int = 0
+    start_time = time.time()
+    next_obs : Any = None
+    info : Any = None
+    terminated : Any = None
+    truncated : Any = None
+    
+    def init(self, key):
         # Tracking and Logging
-        use_velo = 'velo' if args.use_velo else 'adam'
-        self.run_name = f"{use_velo}__{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-        if args.track:
+        use_velo = 'velo' if self.args.use_velo else 'adam'
+        self.run_name = f"{use_velo}__{self.args.env_id}__{self.args.exp_name}__{self.args.seed}__{int(time.time())}"
+        if self.args.track:
             import wandb
 
             wandb.init(
-                project=args.wandb_project_name,
-                entity=args.wandb_entity,
+                project=self.args.wandb_project_name,
+                entity=self.args.wandb_entity,
                 sync_tensorboard=True,
-                config=vars(args),
+                config=vars(self.args),
                 name=self.run_name,
                 monitor_gym=True,
                 save_code=True,
@@ -44,12 +63,12 @@ class PPOTask():
             "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(self.args).items()])),
         )
 
-        # temp environment for getting observation/action spaces
-        envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
+        # early environment initialization for getting observation/action spaces
+        self.envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
 
         # agent setup
         self.network = Network()
-        self.actor = Actor(action_dim=envs.single_action_space.n)
+        self.actor = Actor(action_dim=self.envs.single_action_space.n)
         self.critic = Critic()
         self.params : AgentParams = None
 
@@ -59,12 +78,7 @@ class PPOTask():
         self.critic.apply = jax.jit(self.critic.apply)
         self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
 
-        # Tracked metrics
-        self.global_step = 0
-
-    def init(self, key):
         # Initialize Envs
-        self.envs = make_env(self.args.env_id, self.args.seed, self.args.num_envs)()
         self.episode_stats = EpisodeStatistics(
             episode_returns=jnp.zeros(self.args.num_envs, dtype=jnp.float32),
             episode_lengths=jnp.zeros(self.args.num_envs, dtype=jnp.int32),
@@ -76,8 +90,6 @@ class PPOTask():
         self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
         # TRY NOT TO MODIFY: start the game
-        self.global_step = 0
-        self.start_time = time.time()
         self.next_obs, info = self.envs.reset()
         self.terminated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
         self.truncated = jnp.zeros(self.args.num_envs, dtype=jax.numpy.bool_)
