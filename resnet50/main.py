@@ -70,7 +70,7 @@ if __name__ == '__main__':
                                 'weight_decay': args.weight_decay
                             },
                             logger_params={
-                                'track': False,
+                                'track': True,
                                 'wandb_project_name': args.wandb_project_name,
                                 'wandb_entity': args.wandb_entity
                             },
