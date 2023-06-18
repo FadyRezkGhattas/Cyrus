@@ -51,9 +51,6 @@ class TrainState(train_state.TrainState):
     # You can further extend the TrainState by any additional part here
     # For example, rng to keep for init, dropout, etc.
     rng : Any = None
-    # Save loss as a state because learned optimizers need it as input
-    # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
-    loss : Any = dc.field(default_factory=lambda: jnp.asarray(0))
 
 ####
 ## Module
