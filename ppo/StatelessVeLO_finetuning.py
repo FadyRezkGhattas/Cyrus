@@ -16,38 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 from PPOTask import *
 from VeLO import get_optax_velo
-
-class VeloState(TrainState):
-    # A simple extension of TrainState to also include batch statistics
-    # If a model has no batch statistics, it is None
-    batch_stats : Any = None
-    # You can further extend the TrainState by any additional part here
-    # For example, rng to keep for init, dropout, etc.
-    rng : Any = None
-    # Save loss as a state because learned optimizers need it as input
-    # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
-    loss : Any = dc.field(default_factory=lambda: jnp.asarray(0))
-
-    def apply_gradients(self, *, grads, **kwargs):
-        # Clipping gradients as implemented here: https://github.com/deepmind/optax/blob/master/optax/_src/clipping.py#L91
-        # replicating logic to avoid editing the chain operation to accept extra_args as velo expects
-        g_norm = optax.global_norm(grads)
-        trigger = jnp.squeeze(g_norm < args.max_grad_norm)
-        chex.assert_shape(trigger, ())  # A scalar.
-        def clip_fn(t):
-            return jax.lax.select(trigger, t, (t / g_norm.astype(t.dtype)) * args.max_grad_norm)
-        grads = jax.tree_util.tree_map(clip_fn, grads)
-    
-        # Change update signature to pass loss as expected by VeLO
-        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
-        new_params = optax.apply_updates(self.params, updates)
-        
-        return self.replace(
-            step = self.step + 1,
-            params = new_params,
-            opt_state = new_opt_state,
-            **kwargs
-        )
+from VeloTrainState import VeloState
 
 def make_env_vmap(env_id, seed, num_envs, key=None):
     envs = envpool.make(
@@ -103,7 +72,5 @@ if __name__ == '__main__':
         )
     velo_states = jax.vmap(init_velo_state)(params)
 
-    def debug(velo_state):
-        jax.debug.print("this is loss {l}", l=velo_state.params.actor_params)
-    
-    jax.vmap(debug)(velo_states)
+    for update in range(1, args.num_updates + 1):
+        _ = jax.vmap(ppo_task.update)(velo_states, keys, episode_stats, next_obs, terminated, truncated, handle)
