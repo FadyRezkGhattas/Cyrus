@@ -14,9 +14,9 @@ import jax.numpy as jnp
 from flax import linen as nn
 
 class VeloState(TrainState):
-    def apply_gradients(self, *, grads, **kwargs):
+    def apply_gradients(self, *, grads, loss, **kwargs):
         # Change update signature to pass loss as expected by VeLO
-        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
+        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": loss})
         new_params = optax.apply_updates(self.params, updates)
         
         return self.replace(
