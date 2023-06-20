@@ -274,7 +274,7 @@ class TrainerModule:
             return metrics
         raise NotImplementedError
     
-    def train_model(self, train_loader : Iterator, val_loader : Iterator, test_loader : Optional[Iterator] = None, num_epochs : int = 500) -> Dict[str, Any]:
+    def train_model(self, train_loader : Iterator, val_loader : Iterator = None, test_loader : Optional[Iterator] = None, num_epochs : int = 500) -> Dict[str, Any]:
         """Starts a training loop for the given number of epochs/
 
         Args:
@@ -299,7 +299,7 @@ class TrainerModule:
             self.log(train_metrics, step=epoch_idx)
             self.on_training_epoch_end(epoch_idx)
             # Validation every N epochs
-            if epoch_idx % self.check_val_every_n_epoch == 0:
+            if epoch_idx % self.check_val_every_n_epoch == 0 and val_loader is not None:
                 eval_metrics = self.eval_model(val_loader, log_prefix='val/')
                 self.on_validation_epoch_end(epoch_idx, eval_metrics, val_loader)
                 self.log(eval_metrics, step=epoch_idx)
@@ -414,10 +414,13 @@ class TrainerModule:
         """
         with open(os.path.join(f'runs/{self.run_name}/metrics/{filename}.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
-        wandb.save(f'runs/{self.run_name}/metrics/{filename}.json')
+        
+        if self.config['logger_params'].get('track', False):
+            wandb.save(f'runs/{self.run_name}/metrics/{filename}.json')
 
     def log(self, metrics : Dict[str, Any], step : int):
-        wandb.log(metrics, step)
+        if self.config['logger_params'].get('track', False):
+            wandb.log(metrics, step)
 
     def on_training_start(self):
         """
@@ -539,7 +542,8 @@ def create_data_loaders(*datasets : Sequence[data.Dataset],
                         train : Union[bool, Sequence[bool]] = True, 
                         batch_size : int = 128, 
                         num_workers : int = 4, 
-                        seed : int = 42):
+                        seed : int = 42,
+                        collate_fn = numpy_collate):
     """
     Creates data loaders used in JAX for a set of datasets.
     
@@ -560,7 +564,7 @@ def create_data_loaders(*datasets : Sequence[data.Dataset],
                                  batch_size=batch_size,
                                  shuffle=is_train,
                                  drop_last=is_train,
-                                 collate_fn=numpy_collate,
+                                 collate_fn=collate_fn,
                                  num_workers=num_workers,
                                  persistent_workers=is_train,
                                  generator=torch.Generator().manual_seed(seed))
