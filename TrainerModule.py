@@ -425,6 +425,7 @@ class TrainerModule:
     def log(self, metrics : Dict[str, Any], step : int):
         if self.config['logger_params'].get('track', False):
             wandb.log(metrics, step)
+        self.writer.add_scalars('metrics', metrics, step)
 
     def on_training_start(self):
         """

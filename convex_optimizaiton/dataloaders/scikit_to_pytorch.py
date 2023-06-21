@@ -13,18 +13,14 @@ import jax.numpy as jnp
 def numpy_scikit_collate(batch):
   """Collate function that converts a TensorDataset to a NumPy array."""
   x, y = zip(*batch)
-  x = torch.stack(x, dim=1)
-  y = torch.stack(y, dim=1)
+  x = torch.stack(x)
+  y = torch.stack(y)
   return x.numpy(), y.numpy()
 
-def _ScikitDatasetToPytorch(n_samples=1000, n_features=10, random_state=42):
-    X, Y = make_regression(n_samples=n_samples, n_features=n_features, random_state=random_state)
-    X = torch.from_numpy(X).to(torch.float32)
-    Y = torch.from_numpy(Y).unsqueeze(1).to(torch.float32)
-    return TensorDataset(X, Y)
-
-def ScikitDatastToDataLoader(batch_size, n_samples=1000, n_features=10, random_state=42):
-    dataset = _ScikitDatasetToPytorch(n_samples, n_features, random_state)
+def ScikitDatastToDataLoader(batch_size=10, n_samples=10, n_features=10, effective_rank=None, n_informative=10, noise=25, random_state=42):
+    X, Y = make_regression(n_samples=n_samples, n_features=n_features, random_state=random_state, effective_rank=effective_rank, n_informative=n_informative, noise=noise)
+    X, Y = torch.from_numpy(X).to(torch.float32), torch.from_numpy(Y).unsqueeze(1).to(torch.float32)
+    dataset = TensorDataset(X, Y)
     return create_data_loaders(dataset, train=[True], batch_size=batch_size, collate_fn=numpy_scikit_collate)[0]
 
 class RegressionDataset(Dataset):
