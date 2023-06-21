@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from TrainerModule import TrainerModule
 from VeloTrainerModule import VeloTrainerModule
 import optax
-from jaxopt._src import tree_util
+import jax.tree_util as tree_util
 
 class LinearTrainer(VeloTrainerModule):
     def __init__(self, model_class,
@@ -27,8 +27,13 @@ class LinearTrainer(VeloTrainerModule):
         def train_step(state, batch):
             loss_fn = lambda params: mse_loss(params, batch)
             loss, grads = jax.value_and_grad(loss_fn)(state.params)
-            state = state.apply_gradients(grads=grads, loss= loss)
-            metrics = {'loss': loss}
+            state, updates = state.apply_gradients(grads=grads, loss= loss, return_updates=True)
+            grads, updates = grads.unfreeze(), updates.unfreeze()
+            grads, updates = jax.tree_util.tree_leaves(grads), jax.tree_util.tree_leaves(updates)
+            grads = jnp.concatenate([jnp.ravel(grad) for grad in grads])
+            updates = jnp.concatenate([jnp.ravel(update) for update in updates])
+            update_direction = jnp.dot(grads, updates)
+            metrics = {'loss': loss, 'update_direction': update_direction}
             return state, metrics
         
         def eval_step(state, batch):
