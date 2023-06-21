@@ -67,6 +67,7 @@ class TrainerModule:
                  enable_progress_bar : bool = True,
                  debug : bool = False,
                  check_val_every_n_epoch : int = 1,
+                 run_name : str = None,
                  **kwargs) -> None:
         """A basic Trainer module summarizing most common training functionalities like logging, model initialization, training loop, etc.
 
@@ -107,7 +108,10 @@ class TrainerModule:
         # Set experiment name
         model = self.config["model_class"]
         regularization = 'l2reg' if self.add_l2reg and self.optimizer_hparams['weight_decay'] > 0 else 'basic-loss'
-        self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{kwargs['extra_args'].batch_size}__{self.seed}"
+        if run_name is None:
+            self.run_name = f"{model}__{self.optimizer_name}__{regularization}__{kwargs['extra_args'].batch_size}__{self.seed}"
+        else:
+            self.run_name = run_name
 
         # Create empty model. Note: no parameters yet
         self.model = self.model_class(**self.model_hparams)
