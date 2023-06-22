@@ -5,12 +5,12 @@ sys.path.append(
 from distutils.util import strtobool
 import argparse
 
+import numpy as np
 from TrainerModule import create_data_loaders
-from LinearTrainer import LinearTrainer
+from LinearTrainer import LinearTrainer, LinearClassifierTrainer
 from linear import LinearModel
-from dataloaders.scikit_to_pytorch import RegressionDataset, ScikitDatastToDataLoader
-from torch.utils.data import DataLoader
-import time
+from dataloaders.scikit_to_pytorch import ScikitDatastToDataLoader
+from sklearn.datasets import *
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -36,37 +36,13 @@ def parse_args():
     
 if __name__ == '__main__':
     args = parse_args()
-    effective_ranks = list(range(5, args.n_features+1))
+
+    # informative features ablation
     n_informatives = list(range(5, args.n_features+1))
-    
-    for effective_rank in effective_ranks:
-        exp_name = f"effective_rank_{effective_rank}"
-        #batch_size=10, n_samples=10, n_features=10, effective_rank=None, n_informative=10, noise=25, random_state=42
-        train_data_dataloader = ScikitDatastToDataLoader(batch_size=args.batch_size, n_samples=args.n_samples, n_features=args.n_features, effective_rank=effective_rank, n_informative=args.n_features, random_state=args.seed)
-        trainer = LinearTrainer(LinearModel,
-                                seed = args.seed,
-                                model_hparams={
-                                    'number_out_features': 1
-                                },                  
-                                optimizer_hparams={
-                                    'weight_decay': args.weight_decay
-                                },
-                                logger_params={
-                                    'track': True,
-                                    'wandb_project_name': args.wandb_project_name,
-                                    'wandb_entity': args.wandb_entity
-                                },
-                                exmp_input=next(iter(train_data_dataloader)),
-                                run_name=exp_name,
-                                extra_args=args)
-        trainer.train_model(
-            train_loader=train_data_dataloader,
-            num_epochs=500
-        )
-    
     for n_informative in n_informatives:
         exp_name = f"n_informative_{n_informative}"
-        train_data_dataloader = ScikitDatastToDataLoader(batch_size=args.batch_size, n_samples=args.n_samples, n_features=args.n_features, n_informative=n_informative, effective_rank=None, random_state=args.seed)
+        X, Y = make_regression(n_samples=args.n_samples, n_features=args.n_features, n_informative=n_informative, effective_rank=None, random_state=args.seed)
+        train_data_dataloader = ScikitDatastToDataLoader(X, Y, args.batch_size)
         trainer = LinearTrainer(LinearModel,
                                 seed = args.seed,
                                 model_hparams={
@@ -86,4 +62,60 @@ if __name__ == '__main__':
         trainer.train_model(
             train_loader=train_data_dataloader,
             num_epochs=200
+        )
+
+    # classification datasets
+    datasets_ = [load_iris, load_digits, load_wine, load_breast_cancer,
+                 fetch_olivetti_faces, fetch_lfw_people, fetch_covtype]
+    names = ['toy_classification_iris', 'toy_classification_digits', 'toy_classification_wine', 'toy_classification_breast_cancer',
+             'real_classification_olivetti_faces', 'real_classification_lfw_people', 'real_classification_covtype']
+    for dataset, name in zip(datasets_, names):
+        X, Y = dataset(return_X_y=True)
+        train_data_dataloader = ScikitDatastToDataLoader(X, Y, X.shape[0], regression=False)
+        trainer = LinearClassifierTrainer(LinearModel,
+                                seed = args.seed,
+                                model_hparams={
+                                    'number_out_features': np.unique(Y).shape[0]
+                                },                  
+                                optimizer_hparams={
+                                    'weight_decay': args.weight_decay
+                                },
+                                logger_params={
+                                    'track': True,
+                                    'wandb_project_name': args.wandb_project_name,
+                                    'wandb_entity': args.wandb_entity
+                                },
+                                exmp_input=next(iter(train_data_dataloader)),
+                                run_name=name,
+                                extra_args=args)
+        trainer.train_model(
+            train_loader=train_data_dataloader,
+            num_epochs=200
+        )
+
+    # regression datasets
+    datasets_ = [load_diabetes, load_linnerud, fetch_california_housing]
+    names = ['toy_regression_diabetes', 'toy_regression_linnerud', 'real_regression_california_housing']
+    for dataset, name in zip(datasets_, names):
+        X, Y = dataset(return_X_y=True)
+        train_data_dataloader = ScikitDatastToDataLoader(X, Y, X.shape[0])
+        trainer = LinearTrainer(LinearModel,
+                                seed = args.seed,
+                                model_hparams={
+                                    'number_out_features': 1 if dataset.__name__ != 'load_linnerud' else 3
+                                },                  
+                                optimizer_hparams={
+                                    'weight_decay': args.weight_decay
+                                },
+                                logger_params={
+                                    'track': True,
+                                    'wandb_project_name': args.wandb_project_name,
+                                    'wandb_entity': args.wandb_entity
+                                },
+                                exmp_input=next(iter(train_data_dataloader)),
+                                run_name=name,
+                                extra_args=args)
+        trainer.train_model(
+            train_loader=train_data_dataloader,
+            num_epochs=350
         )
