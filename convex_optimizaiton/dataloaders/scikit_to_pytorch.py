@@ -17,9 +17,11 @@ def numpy_scikit_collate(batch):
   y = torch.stack(y)
   return x.numpy(), y.numpy()
 
-def ScikitDatastToDataLoader(batch_size=10, n_samples=10, n_features=10, effective_rank=None, n_informative=10, noise=25, random_state=42):
-    X, Y = make_regression(n_samples=n_samples, n_features=n_features, random_state=random_state, effective_rank=effective_rank, n_informative=n_informative, noise=noise)
-    X, Y = torch.from_numpy(X).to(torch.float32), torch.from_numpy(Y).unsqueeze(1).to(torch.float32)
+def ScikitDatastToDataLoader(X, Y, batch_size, regression=True):
+    if regression:
+        X, Y = torch.from_numpy(X).to(torch.float32), torch.from_numpy(Y).unsqueeze(1).to(torch.float32)
+    else:
+        X, Y = torch.from_numpy(X).to(torch.float32), torch.from_numpy(Y).to(torch.int16)
     dataset = TensorDataset(X, Y)
     return create_data_loaders(dataset, train=[True], batch_size=batch_size, collate_fn=numpy_scikit_collate)[0]
 
