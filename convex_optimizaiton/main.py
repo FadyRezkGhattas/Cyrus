@@ -63,7 +63,6 @@ if __name__ == '__main__':
             train_loader=train_data_dataloader,
             num_epochs=500
         )
-        time.sleep(2)
     
     for n_informative in n_informatives:
         exp_name = f"n_informative_{n_informative}"

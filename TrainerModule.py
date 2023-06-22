@@ -322,6 +322,8 @@ class TrainerModule:
             self.log(test_metrics, step=epoch_idx)
             self.save_metrics('test', test_metrics)
             best_eval_metrics.update(test_metrics)
+
+        wandb.finish()
         
         return best_eval_metrics
     
