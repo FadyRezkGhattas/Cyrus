@@ -11,6 +11,7 @@ from LinearTrainer import LinearTrainer, LinearClassifierTrainer
 from linear import LinearModel
 from dataloaders.scikit_to_pytorch import ScikitDatastToDataLoader
 from sklearn.datasets import *
+from sklearn.preprocessing import StandardScaler
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -37,6 +38,46 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    # ill-conditioned problem
+    eigenvals = [4,6,8,10]
+    for eigenval in eigenvals:
+        # Generate an ill-conditioned positive definite matrix A
+        D = np.diag([eigenval**(i-1) for i in range(1, args.n_features+1)])
+        Q, _ = np.linalg.qr(np.random.randn(args.n_features, args.n_features))
+        A = Q.T @ D @ Q
+        # Generate input data and corresponding output values
+        X, y = make_regression(n_samples=100, n_features=args.n_features, random_state=42, noise=10)
+        # Compute the output values using the ill-conditioned matrix A
+        y_true = X @ A
+        # Add noise to the computed output values
+        noise = np.random.normal(loc=0, scale=10, size=y_true.shape)
+        y_noisy = y_true + noise
+        # normalize in/out features
+        X = StandardScaler().fit_transform(X)
+        y_noisy = StandardScaler().fit_transform(y_noisy)
+
+        train_data_dataloader = ScikitDatastToDataLoader(X, y_noisy, X.shape[0])
+        trainer = LinearTrainer(LinearModel,
+                                    seed = args.seed,
+                                    model_hparams={
+                                        'number_out_features': 10
+                                    },                  
+                                    optimizer_hparams={
+                                        'weight_decay': args.weight_decay
+                                    },
+                                    logger_params={
+                                        'track': True,
+                                        'wandb_project_name': args.wandb_project_name,
+                                        'wandb_entity': args.wandb_entity
+                                    },
+                                    exmp_input=next(iter(train_data_dataloader)),
+                                    run_name=f"ill_conditioned_normalized_{eigenval}",
+                                    extra_args=args)
+        trainer.train_model(
+            train_loader=train_data_dataloader,
+            num_epochs=200
+        )
+    '''
     # informative features ablation
     n_informatives = list(range(5, args.n_features+1))
     for n_informative in n_informatives:
@@ -118,4 +159,4 @@ if __name__ == '__main__':
         trainer.train_model(
             train_loader=train_data_dataloader,
             num_epochs=350
-        )
+        )'''
