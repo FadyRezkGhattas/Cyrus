@@ -222,7 +222,8 @@ class Branin(FunctionalTask):
         return term1 + term2 + self.s
     
     def get_init_x(self, key):
-        return jax.random.uniform(key, minval=-5, maxval=10, shape=[2])
+        key, subkey = jax.random.split(key)
+        return jnp.array([jax.random.uniform(key, minval=-5, maxval=10), jax.random.uniform(subkey, minval=0, maxval=15)])
 
 class StyblinskiTang(FunctionalTask):
     def __init__(self, variables: Dict[str, Any]) -> None:
