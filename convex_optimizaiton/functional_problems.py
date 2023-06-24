@@ -60,8 +60,8 @@ class Matyas(FunctionalTask):
             The function is usually evaluated on the hypercube x, y ∈ [-10, 10].
 
         Args:
-            variables (Dict[str, Any]): Should contain 'dim' (dimensionality of the problem).
-                Note that Matyas function is defined for 2-dimensional inputs.
+            variables (Dict[str, Any]): Note that Matyas function is defined for 2-dimensional inputs.
+            This can be empty.
         """
         super().__init__(variables)
         self.variables = variables
@@ -105,7 +105,6 @@ class Booth(FunctionalTask):
     def get_init_x(self, key):
         return jax.random.uniform(key, minval=-10, maxval=10, shape=[2])
 
-#TODO: chatgpt implementaiton is wrong. fix the evaluate function
 class Rosenbrock(FunctionalTask):
     def __init__(self, variables: Dict[str, Any]) -> None:
         """
@@ -128,7 +127,7 @@ class Rosenbrock(FunctionalTask):
         return jnp.sum(100.0 * (x2 - x1 ** 2) ** 2 + (1 - x1) ** 2)
     
     def get_init_x(self, key):
-        return jax.random.uniform(key, minval=-5, maxval=10, shape=[self.variables['dim']])
+        return jax.random.uniform(key, minval=-2.048, maxval=2.048, shape=[self.variables['dim']])
 
 class Michalewicz(FunctionalTask):
     def __init__(self, variables: Dict[str, Any]) -> None:
