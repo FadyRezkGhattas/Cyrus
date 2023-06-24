@@ -248,8 +248,35 @@ class StyblinskiTang(FunctionalTask):
     def get_init_x(self, key):
         return jax.random.uniform(key, minval=-5, maxval=5, shape=[self.variables['dim']])
 
+class Rastrigin(FunctionalTask):
+    def __init__(self, variables: Dict[str, Any]) -> None:
+        """
+        The Rastrigin function is a non-convex function commonly used for testing optimization algorithms.
+        It is a typical multimodal function with many local minima, making it challenging for optimization algorithms
+        to find the global minimum.
+
+        Input Domain:
+            The function is usually evaluated on the hypercube xi ∈ [-5.12, 5.12],
+            for all i = 1, ..., dim, although it may also be restricted to a smaller domain.
+
+        Args:
+            variables (Dict[str, Any]): Should contain 'dim' (dimensionality of the problem).
+        """
+        super().__init__(variables)
+        self.variables = variables
+
+    def evaluate(self, x):
+        dim = self.variables['dim']
+        term1 = 10 * dim
+        term2 = jnp.sum(jnp.square(x) - 10 * jnp.cos(2 * jnp.pi * x))
+        return term1 + term2
+
+    def get_init_x(self, key):
+        dim = self.variables['dim']
+        return jax.random.uniform(key, minval=-5.12, maxval=5.12, shape=[dim])
+
 if __name__ == '__main__':
-    functions = Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang
+    functions = Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin
     evaluation_variables = {
         "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 10},
         "Matyas": {"dim" : 2},
@@ -258,7 +285,8 @@ if __name__ == '__main__':
         "Michalewicz": {"dim" : 10},
         "Beale": {},
         "Brannin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
-        "StyblinskiTang": {"dim" : 10}
+        "StyblinskiTang": {"dim" : 10},
+        "Rastrigin": {"dim" : 10}
     }
     NUM_STEPS = 10000
     for func_class in functions:
