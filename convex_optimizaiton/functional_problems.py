@@ -122,9 +122,9 @@ class Rosenbrock(FunctionalTask):
         self.variables = variables
 
     def evaluate(self, x):
-        term1 = jnp.square(1 - x[:-1])
-        term2 = jnp.square(x[1:] - jnp.square(x[:-1]))
-        return jnp.sum(100 * term1 + term2)
+        x1 = x[:-1]
+        x2 = x[1:]
+        return jnp.sum(100.0 * (x2 - x1 ** 2) ** 2 + (1 - x1) ** 2)
     
     def get_init_x(self, key):
         return jax.random.uniform(key, minval=-5, maxval=10, shape=[self.variables['dim']])
@@ -224,7 +224,6 @@ class Branin(FunctionalTask):
     def get_init_x(self, key):
         return jax.random.uniform(key, minval=-5, maxval=10, shape=[2])
 
-#TODO: test this as evaluating at the global minimum location does not return the global minimum value
 class StyblinskiTang(FunctionalTask):
     def __init__(self, variables: Dict[str, Any]) -> None:
         """
@@ -248,18 +247,18 @@ class StyblinskiTang(FunctionalTask):
     def get_init_x(self, key):
         return jax.random.uniform(key, minval=-5, maxval=5, shape=[self.variables['dim']])
 
-key = jax.random.PRNGKey(42)
+if __name__ == '__main__':
+    key = jax.random.PRNGKey(42)
 
-mich = Michalewicz({"dim": 2})
-loss = mich.evaluate(jnp.array([2.20, 1.57]))
+    rosen = Rosenbrock({"dim": 4})
+    f = rosen.evaluate(jnp.array([1.0, 1.0, 1.0, 1.0, 1.0]))
 
-mich = StyblinskiTang({"dim": 2})
-loss = mich.evaluate(jnp.array([-2.903534, -2.903534]))
+    mich = Michalewicz({"dim": 2})
+    f = mich.evaluate(jnp.array([2.20, 1.57]))
 
-ackley = Ackley({"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim": 30})
-params = ackley.get_init_x(key)
-loss = ackley.evaluate(params)
-'''class VeloFunctionalOptimizer:
-    def __init__(self, function : FunctionalTask) -> None:
-        self.function = function
-        self.'''
+    mich = StyblinskiTang({"dim": 2})
+    f = mich.evaluate(jnp.array([-2.903534, -2.903534]))
+
+    ackley = Ackley({"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim": 30})
+    params = ackley.get_init_x(key)
+    f = ackley.evaluate(params)
