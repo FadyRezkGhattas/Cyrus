@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 import jax
 import jax.numpy as jnp
 from jax.experimental import checkify
-import numpy as np
+import optax
+from learned_optimization.research.general_lopt import prefab
 
 class FunctionalTask(ABC):
     def __init__(self, variables : Dict[str, Any]) -> None:
@@ -249,17 +250,16 @@ class StyblinskiTang(FunctionalTask):
         return jax.random.uniform(key, minval=-5, maxval=5, shape=[self.variables['dim']])
 
 if __name__ == '__main__':
+    NUM_STEPS = 10000
     key = jax.random.PRNGKey(42)
-
-    rosen = Rosenbrock({"dim": 4})
-    f = rosen.evaluate(jnp.array([1.0, 1.0, 1.0, 1.0, 1.0]))
-
-    mich = Michalewicz({"dim": 2})
-    f = mich.evaluate(jnp.array([2.20, 1.57]))
-
-    mich = StyblinskiTang({"dim": 2})
-    f = mich.evaluate(jnp.array([-2.903534, -2.903534]))
-
-    ackley = Ackley({"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim": 30})
-    params = ackley.get_init_x(key)
-    f = ackley.evaluate(params)
+    test_func = Branin({"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)})
+    params = test_func.get_init_x(key)
+    grad_fn = jax.jit(jax.value_and_grad(test_func.evaluate))
+    opt = prefab.optax_lopt(NUM_STEPS)
+    opt_state = opt.init(params)
+    for step in range(NUM_STEPS):
+        loss, grad = grad_fn(params)
+        updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
+        params = optax.apply_updates(params, updates)
+        if step % 100 == 0:
+            print(f"Step {step} | Loss {loss}")
