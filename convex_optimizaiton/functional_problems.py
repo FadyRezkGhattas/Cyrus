@@ -276,17 +276,39 @@ class Rastrigin(FunctionalTask):
         return jax.random.uniform(key, minval=-5.12, maxval=5.12, shape=[dim])
 
 if __name__ == '__main__':
-    functions = Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin
+    functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
     evaluation_variables = {
         "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 10},
         "Matyas": {"dim" : 2},
         "Booth": {"dim" : 2},
         "Rosenbrock": {"dim" : 10},
-        "Michalewicz": {"dim" : 10},
+        "Michalewicz": {"dim" : 2},
         "Beale": {},
-        "Brannin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
+        "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
         "StyblinskiTang": {"dim" : 10},
         "Rastrigin": {"dim" : 10}
+    }
+    minimum_value = {
+        "Ackley": 0,
+        "Matyas": 0,
+        "Booth": 0,
+        "Rosenbrock": 0,
+        "Michalewicz": -1.8013,
+        "Beale": 0,
+        "Branin": 0.397887,
+        "StyblinskiTang": -39.16599*10,
+        "Rastrigin": 0
+    }
+    minimum_coordinate = {
+        "Ackley": [jnp.zeros(10)],
+        "Matyas": [jnp.zeros(2)],
+        "Booth": [jnp.array([1, 3])],
+        "Rosenbrock": [jnp.ones(10)],
+        "Michalewicz": [jnp.array([2.20, 1.57])],
+        "Beale": [jnp.array([3, 0.5])],
+        "Branin": [jnp.array([-3.14, 12.275]), jnp.array([3.14, 2.275]), jnp.array([9.42478, 2.475])],
+        "StyblinskiTang": [jnp.array([-2.903534]*10)],
+        "Rastrigin": [jnp.zeros(10)]
     }
     NUM_STEPS = 10000
     for func_class in functions:
@@ -302,3 +324,6 @@ if __name__ == '__main__':
             params = optax.apply_updates(params, updates)
             if step % 100 == 0:
                 print(f"Step {step} | Loss {loss}")
+        #TODO: log best loss and best params
+        #also log final loss and final params
+        #using the minimum_value and minimum_coordinate dicts, quantify how far is the final loss from the minimum value
