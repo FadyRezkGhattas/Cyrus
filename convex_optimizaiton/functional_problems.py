@@ -249,16 +249,28 @@ class StyblinskiTang(FunctionalTask):
         return jax.random.uniform(key, minval=-5, maxval=5, shape=[self.variables['dim']])
 
 if __name__ == '__main__':
+    functions = Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang
+    evaluation_variables = {
+        "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 10},
+        "Matyas": {"dim" : 2},
+        "Booth": {"dim" : 2},
+        "Rosenbrock": {"dim" : 10},
+        "Michalewicz": {"dim" : 10},
+        "Beale": {},
+        "Brannin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
+        "StyblinskiTang": {"dim" : 10}
+    }
     NUM_STEPS = 10000
-    key = jax.random.PRNGKey(42)
-    test_func = Branin({"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)})
-    params = test_func.get_init_x(key)
-    grad_fn = jax.jit(jax.value_and_grad(test_func.evaluate))
-    opt = prefab.optax_lopt(NUM_STEPS)
-    opt_state = opt.init(params)
-    for step in range(NUM_STEPS):
-        loss, grad = grad_fn(params)
-        updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
-        params = optax.apply_updates(params, updates)
-        if step % 100 == 0:
-            print(f"Step {step} | Loss {loss}")
+    for func_class in functions:
+        key = jax.random.PRNGKey(42)
+        test_func = func_class(evaluation_variables[func_class.__name__])
+        params = test_func.get_init_x(key)
+        grad_fn = jax.jit(jax.value_and_grad(test_func.evaluate))
+        opt = prefab.optax_lopt(NUM_STEPS)
+        opt_state = opt.init(params)
+        for step in range(NUM_STEPS):
+            loss, grad = grad_fn(params)
+            updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
+            params = optax.apply_updates(params, updates)
+            if step % 100 == 0:
+                print(f"Step {step} | Loss {loss}")
