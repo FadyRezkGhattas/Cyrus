@@ -311,7 +311,7 @@ if __name__ == '__main__':
         "StyblinskiTang": [jnp.array([-2.903534]*10)],
         "Rastrigin": [jnp.zeros(10)]
     }
-    NUM_STEPS = 5000
+    NUM_STEPS = 200
     columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
     for func_class in functions:
         func_name = func_class.__name__
@@ -343,9 +343,3 @@ if __name__ == '__main__':
         table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=columns)
         wandb.log({'summary results': table})
         wandb.finish()
-        #TODO: log best loss and best params
-        #also log final loss and final params
-        #using the minimum_value and minimum_coordinate dicts, quantify how far is the final loss from the minimum value
-        '''
-        function name | minimum value | achieved minimum | minimum coordinate | achieved coordinate | function image?
-        '''
