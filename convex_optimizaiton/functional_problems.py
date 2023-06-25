@@ -6,6 +6,15 @@ import jax.numpy as jnp
 from jax.experimental import checkify
 import optax
 from learned_optimization.research.general_lopt import prefab
+import wandb
+
+def get_coordinates_as_string(x):
+    minimum_coordinates = ""
+    for i, arr in enumerate(minimum_coordinate[func_name]):
+        minimum_coordinates += f"Minimum {i+1}: "
+        for number in arr:
+            minimum_coordinates += "%.2f" % number + ", "
+    return minimum_coordinates
 
 class FunctionalTask(ABC):
     def __init__(self, variables : Dict[str, Any]) -> None:
@@ -67,9 +76,6 @@ class Matyas(FunctionalTask):
         self.variables = variables
 
     def evaluate(self, x):
-        x = x.flatten()
-        checkify.check(len(x) == 2, "Matyas function requires 2-dimensional input.")
-
         term1 = 0.26 * (x[0] ** 2 + x[1] ** 2)
         term2 = -0.48 * x[0] * x[1]
 
@@ -95,9 +101,6 @@ class Booth(FunctionalTask):
         self.variables = variables
 
     def evaluate(self, x):
-        x = x.flatten()
-        checkify.check(len(x) == 2, "Matyas function requires 2-dimensional input.")
-
         term1 = jnp.square(x[0] + 2*x[1] - 7)
         term2 = jnp.square(2*x[0] + x[1] - 5)
         return term1 + term2
@@ -181,8 +184,6 @@ class Beale(FunctionalTask):
         self.variables = variables
 
     def evaluate(self, x):
-        x = x.flatten()
-        checkify.check(len(x) == 2, "Matyas function requires 2-dimensional input.")
         term1 = jnp.square(1.5 - x[0] + x[0] * x[1])
         term2 = jnp.square(2.25 - x[0] + x[0] * (x[1] ** 2))
         term3 = jnp.square(2.625 - x[0] + x[0] * (x[1] ** 3))
@@ -310,11 +311,19 @@ if __name__ == '__main__':
         "StyblinskiTang": [jnp.array([-2.903534]*10)],
         "Rastrigin": [jnp.zeros(10)]
     }
-    NUM_STEPS = 10000
+    NUM_STEPS = 5000
+    columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
     for func_class in functions:
+        func_name = func_class.__name__
         key = jax.random.PRNGKey(42)
-        test_func = func_class(evaluation_variables[func_class.__name__])
+        wandb.init(
+            project='velo_pathological_functions',
+            entity='fastautomate',
+            name=f'{func_name}'
+        )
+        test_func = func_class(evaluation_variables[func_name])
         params = test_func.get_init_x(key)
+        initial_position = str(["%.2f" % number for number in jnp.asarray(params)])
         grad_fn = jax.jit(jax.value_and_grad(test_func.evaluate))
         opt = prefab.optax_lopt(NUM_STEPS)
         opt_state = opt.init(params)
@@ -322,8 +331,21 @@ if __name__ == '__main__':
             loss, grad = grad_fn(params)
             updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
             params = optax.apply_updates(params, updates)
-            if step % 100 == 0:
-                print(f"Step {step} | Loss {loss}")
+            wandb.log({"function value": loss})
+        
+        # LOGGING
+        min_f_val = minimum_value[func_name]
+        achieved_min_val = str("%.2f" % jnp.asarray(loss))
+        
+        min_f_coords = get_coordinates_as_string(minimum_coordinate[func_name])
+        achieved_min_coord = str(["%.2f" % number for number in jnp.asarray(params)])
+
+        table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=columns)
+        wandb.log({'summary results': table})
+        wandb.finish()
         #TODO: log best loss and best params
         #also log final loss and final params
         #using the minimum_value and minimum_coordinate dicts, quantify how far is the final loss from the minimum value
+        '''
+        function name | minimum value | achieved minimum | minimum coordinate | achieved coordinate | function image?
+        '''
