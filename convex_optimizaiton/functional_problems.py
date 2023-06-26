@@ -317,7 +317,7 @@ if __name__ == '__main__':
         table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=summary_columns)
         if TRACK: wandb.log({'summary results': table})
         
-        # plot and log optimization trace
+        # PLOTTING
         trace_x = trace[:,0]
         trace_y = trace[:,1]
         min_ = evaluation_variables[func_name]['eval_min'] if evaluation_variables[func_name]['eval_min'] < math.ceil(trace_x.min()) else math.ceil(trace_x.min())
@@ -338,7 +338,11 @@ if __name__ == '__main__':
         plt.colorbar()
         # Plot the optimization trace
         plt.scatter(trace_x, trace_y, cmap="black", edgecolors='black')
-        plt.scatter(min_f_coords[0], min_f_coords[1], marker="*")
+        # Plot the actual minimum
+        for min_coord in minimum_coordinate[func_name]:
+            plt.scatter(min_coord[0], min_coord[1], marker="*")
+        # Plot the achieved minimum
+        plt.scatter(achieved_min_coord[0], achieved_min_coord[1], marker="x")
         # Plot arrows to show the evolution of the trace
         for i in range(len(trace_x) - 1):
             plt.arrow(
@@ -350,7 +354,7 @@ if __name__ == '__main__':
                 color='red'
             )
 
-        plt.title("Optimization Trace on Function Heatmap")
+        plt.title(f"{func_name}")
         plt.xlabel("X")
         plt.ylabel("Y")
         plt.savefig(f"{func_name}.png", dpi=300)
