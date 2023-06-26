@@ -280,6 +280,7 @@ class Rastrigin(FunctionalTask):
         return jax.random.uniform(key, minval=-5.12, maxval=5.12, shape=[dim])
 
 if __name__ == '__main__':
+    exp_name = 'base'
     functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
     NUM_STEPS = 500
     summary_columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
@@ -290,7 +291,7 @@ if __name__ == '__main__':
         if TRACK: wandb.init(
                 project='velo_pathological_functions',
                 entity='fastautomate',
-                name=f'{func_name}'
+                name=f'{exp_name}_{func_name}'
             )
         test_func = func_class(evaluation_variables[func_name])
         params = test_func.get_init_x(key)
@@ -342,17 +343,7 @@ if __name__ == '__main__':
         for min_coord in minimum_coordinate[func_name]:
             plt.scatter(min_coord[0], min_coord[1], marker="*")
         # Plot the achieved minimum
-        plt.scatter(achieved_min_coord[0], achieved_min_coord[1], marker="x")
-        # Plot arrows to show the evolution of the trace
-        for i in range(len(trace_x) - 1):
-            plt.arrow(
-                trace_x[i],
-                trace_y[i],
-                trace_x[i + 1] - trace_x[i],
-                trace_y[i + 1] - trace_y[i],
-                head_width=0,
-                color='red'
-            )
+        plt.scatter(jnp.asarray(params)[0], jnp.asarray(params)[1], marker="x")
 
         plt.title(f"{func_name}")
         plt.xlabel("X")
