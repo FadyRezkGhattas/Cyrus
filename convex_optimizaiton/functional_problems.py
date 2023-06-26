@@ -1,12 +1,14 @@
 from typing import Any, Sequence, Optional, Tuple, Iterator, Dict, Callable, Union
 from abc import ABC, abstractmethod
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 from jax.experimental import checkify
 import optax
 from learned_optimization.research.general_lopt import prefab
 import wandb
+from functional_problems_config import evaluation_variables, minimum_value, minimum_coordinate
 
 def get_coordinates_as_string(x):
     minimum_coordinates = ""
@@ -27,7 +29,7 @@ class FunctionalTask(ABC):
     @abstractmethod
     def get_init_x(self, key):
         raise NotImplementedError
-    
+
 class Ackley(FunctionalTask):
     def __init__(self, variables : Dict[str, Any]) -> None:
         """
@@ -278,49 +280,17 @@ class Rastrigin(FunctionalTask):
 
 if __name__ == '__main__':
     functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
-    evaluation_variables = {
-        "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 10},
-        "Matyas": {"dim" : 2},
-        "Booth": {"dim" : 2},
-        "Rosenbrock": {"dim" : 10},
-        "Michalewicz": {"dim" : 2},
-        "Beale": {},
-        "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
-        "StyblinskiTang": {"dim" : 10},
-        "Rastrigin": {"dim" : 10}
-    }
-    minimum_value = {
-        "Ackley": 0,
-        "Matyas": 0,
-        "Booth": 0,
-        "Rosenbrock": 0,
-        "Michalewicz": -1.8013,
-        "Beale": 0,
-        "Branin": 0.397887,
-        "StyblinskiTang": -39.16599*10,
-        "Rastrigin": 0
-    }
-    minimum_coordinate = {
-        "Ackley": [jnp.zeros(10)],
-        "Matyas": [jnp.zeros(2)],
-        "Booth": [jnp.array([1, 3])],
-        "Rosenbrock": [jnp.ones(10)],
-        "Michalewicz": [jnp.array([2.20, 1.57])],
-        "Beale": [jnp.array([3, 0.5])],
-        "Branin": [jnp.array([-3.14, 12.275]), jnp.array([3.14, 2.275]), jnp.array([9.42478, 2.475])],
-        "StyblinskiTang": [jnp.array([-2.903534]*10)],
-        "Rastrigin": [jnp.zeros(10)]
-    }
     NUM_STEPS = 200
-    columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
+    summary_columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
+    TRACK = False
     for func_class in functions:
         func_name = func_class.__name__
         key = jax.random.PRNGKey(42)
-        wandb.init(
-            project='velo_pathological_functions',
-            entity='fastautomate',
-            name=f'{func_name}'
-        )
+        if TRACK: wandb.init(
+                project='velo_pathological_functions',
+                entity='fastautomate',
+                name=f'{func_name}'
+            )
         test_func = func_class(evaluation_variables[func_name])
         params = test_func.get_init_x(key)
         initial_position = str(["%.2f" % number for number in jnp.asarray(params)])
@@ -331,15 +301,18 @@ if __name__ == '__main__':
             loss, grad = grad_fn(params)
             updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
             params = optax.apply_updates(params, updates)
-            wandb.log({"function value": loss})
+            if TRACK: wandb.log({"function value": loss})
         
         # LOGGING
+        # summary table
         min_f_val = minimum_value[func_name]
         achieved_min_val = str("%.2f" % jnp.asarray(loss))
         
         min_f_coords = get_coordinates_as_string(minimum_coordinate[func_name])
         achieved_min_coord = str(["%.2f" % number for number in jnp.asarray(params)])
 
-        table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=columns)
-        wandb.log({'summary results': table})
+        table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=summary_columns)
+        if TRACK: wandb.log({'summary results': table})
+        # plot optimization trace
+
         wandb.finish()
