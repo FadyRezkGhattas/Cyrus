@@ -5,7 +5,7 @@ evaluation_variables = {
     "Matyas": {"dim" : 2, "eval_min": -10, "eval_max": 10},
     "Booth": {"dim" : 2, "eval_min": -10, "eval_max": 10},
     "Rosenbrock": {"dim" : 2, "eval_min": -2.048, "eval_max": 2.048},
-    "Michalewicz": {"dim" : 2, "eval_mind": 0, "eval_max": jnp.pi},
+    "Michalewicz": {"dim" : 2, "eval_min": 0, "eval_max": jnp.pi},
     "Beale": {"eval_min": -4.5, "eval_max": 4.5},
     "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi), "eval_min": -5, "eval_max": 15},
     "StyblinskiTang": {"dim" : 2, "eval_min": -5, "eval_max": 5},
