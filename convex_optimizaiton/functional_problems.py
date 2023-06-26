@@ -280,18 +280,18 @@ class Rastrigin(FunctionalTask):
         return jax.random.uniform(key, minval=-5.12, maxval=5.12, shape=[dim])
 
 if __name__ == '__main__':
-    exp_name = 'base'
+    seed = 42
     functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
     NUM_STEPS = 500
     summary_columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
     TRACK = True
     for func_class in functions:
         func_name = func_class.__name__
-        key = jax.random.PRNGKey(42)
+        key = jax.random.PRNGKey(seed)
         if TRACK: wandb.init(
                 project='velo_pathological_functions',
                 entity='fastautomate',
-                name=f'{exp_name}_{func_name}'
+                name=f'{func_name}_{seed}'
             )
         test_func = func_class(evaluation_variables[func_name])
         params = test_func.get_init_x(key)
@@ -321,8 +321,8 @@ if __name__ == '__main__':
         # PLOTTING
         trace_x = trace[:,0]
         trace_y = trace[:,1]
-        min_ = evaluation_variables[func_name]['eval_min'] if evaluation_variables[func_name]['eval_min'] < math.ceil(trace_x.min()) else math.ceil(trace_x.min())
-        max_ = evaluation_variables[func_name]['eval_max'] if evaluation_variables[func_name]['eval_max'] > math.ceil(trace_x.max()) else math.ceil(trace_x.max())
+        min_ = evaluation_variables[func_name]['eval_min'] if evaluation_variables[func_name]['eval_min'] < trace_x.min() else trace_x.min()
+        max_ = evaluation_variables[func_name]['eval_max'] if evaluation_variables[func_name]['eval_max'] > trace_x.max() else trace_x.max()
         x = np.linspace(min_, max_, 100)
         y = np.linspace(min_, max_, 100)
         X, Y = np.meshgrid(x, y)
@@ -335,7 +335,7 @@ if __name__ == '__main__':
         plt.clf()
         plt.cla()
         plt.close()
-        plt.imshow(Z, extent=[math.ceil(x.min()), math.ceil(x.max()), math.ceil(y.min()), math.ceil(y.max())], origin='lower', cmap='viridis')
+        plt.imshow(Z, extent=[x.min(), x.max(), y.min(), y.max()], origin='lower', cmap='viridis')
         plt.colorbar()
         # Plot the optimization trace
         plt.scatter(trace_x, trace_y, cmap="black", edgecolors='black')
