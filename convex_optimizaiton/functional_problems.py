@@ -279,9 +279,34 @@ class Rastrigin(FunctionalTask):
         dim = self.variables['dim']
         return jax.random.uniform(key, minval=-5.12, maxval=5.12, shape=[dim])
 
+class Griewank(FunctionalTask):
+    def __init__(self, variables: Dict[str, Any]) -> None:
+        super().__init__(variables)
+        self.variables = variables
+
+    def evaluate(self, x):
+        term1 = jnp.sum(jnp.square(x)) / 4000
+        term2 = jnp.prod(jnp.cos(x / jnp.sqrt(jnp.arange(1, x.shape[0]))))
+        return term1 - term2 + 1
+    
+    def get_init_x(self, key):
+        return jax.random.uniform(key, minval=-600, maxval=600, shape=[self.variables['dim']])
+
+class Schwefel(FunctionalTask):
+    def __init__(self, variables: Dict[str, Any]) -> None:
+        super().__init__(variables)
+        self.variables = variables
+
+    def evaluate(self, x):
+        term1 = jnp.sum(x * jnp.sin(jnp.sqrt(jnp.abs(x))))
+        return (418.9829 * self.variables['dim']) - term1
+    
+    def get_init_x(self, key):
+        return jax.random.uniform(key, minval=-500, maxval=500, shape=[self.variables['dim']])
+
 if __name__ == '__main__':
     seed = 42
-    functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
+    functions = [Ackley, Rastrigin, Griewank, Schwefel, Matyas, Booth, Michalewicz, StyblinskiTang, Rosenbrock, Beale, Branin]
     NUM_STEPS = 500
     summary_columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
     TRACK = True

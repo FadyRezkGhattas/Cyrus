@@ -9,7 +9,9 @@ evaluation_variables = {
     "Beale": {"eval_min": -4.5, "eval_max": 4.5},
     "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi), "eval_min": -5, "eval_max": 15},
     "StyblinskiTang": {"dim" : 2, "eval_min": -5, "eval_max": 5},
-    "Rastrigin": {"dim" : 2, "eval_min": -5.12, "eval_max": 5.12}
+    "Rastrigin": {"dim" : 2, "eval_min": -5.12, "eval_max": 5.12},
+    "Griewank": {"dim" : 2, "eval_min": -600, "eval_max": 600},
+    "Schwefel": {"dim" : 2, "eval_min": -500, "eval_max": 500}
 }
 minimum_value = {
     "Ackley": 0,
@@ -20,7 +22,9 @@ minimum_value = {
     "Beale": 0,
     "Branin": 0.397887,
     "StyblinskiTang": -39.16599*10,
-    "Rastrigin": 0
+    "Rastrigin": 0,
+    "Griewank": 0,
+    "Schwefel": 0
 }
 minimum_coordinate = {
     "Ackley": [jnp.zeros(2)],
@@ -31,5 +35,7 @@ minimum_coordinate = {
     "Beale": [jnp.array([3, 0.5])],
     "Branin": [jnp.array([-3.14, 12.275]), jnp.array([3.14, 2.275]), jnp.array([9.42478, 2.475])],
     "StyblinskiTang": [jnp.array([-2.903534]*2)],
-    "Rastrigin": [jnp.zeros(2)]
+    "Rastrigin": [jnp.zeros(2)],
+    "Griewank": [jnp.zeros(2)],
+    "Schwefel": [jnp.array([420.9687, 420.9687])]
 }
