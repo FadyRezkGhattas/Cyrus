@@ -1,13 +1,14 @@
+import math
 from typing import Any, Sequence, Optional, Tuple, Iterator, Dict, Callable, Union
 from abc import ABC, abstractmethod
 
-import numpy as np
-import jax
-import jax.numpy as jnp
-from jax.experimental import checkify
-import optax
-from learned_optimization.research.general_lopt import prefab
 import wandb
+import jax
+import optax
+import numpy as np
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+from learned_optimization.research.general_lopt import prefab
 from functional_problems_config import evaluation_variables, minimum_value, minimum_coordinate
 
 def get_coordinates_as_string(x):
@@ -280,9 +281,9 @@ class Rastrigin(FunctionalTask):
 
 if __name__ == '__main__':
     functions = [Ackley, Matyas, Booth, Rosenbrock, Michalewicz, Beale, Branin, StyblinskiTang, Rastrigin]
-    NUM_STEPS = 200
+    NUM_STEPS = 500
     summary_columns = ['function name', 'initial position', 'minimum value', 'achieved minimum', 'minimum coordinate', 'achieved coordinate']
-    TRACK = False
+    TRACK = True
     for func_class in functions:
         func_name = func_class.__name__
         key = jax.random.PRNGKey(42)
@@ -297,8 +298,10 @@ if __name__ == '__main__':
         grad_fn = jax.jit(jax.value_and_grad(test_func.evaluate))
         opt = prefab.optax_lopt(NUM_STEPS)
         opt_state = opt.init(params)
+        trace = np.empty((NUM_STEPS, 3))
         for step in range(NUM_STEPS):
             loss, grad = grad_fn(params)
+            trace[step] = np.concatenate((jax.device_get(params), [jax.device_get(loss)]))
             updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
             params = optax.apply_updates(params, updates)
             if TRACK: wandb.log({"function value": loss})
@@ -313,6 +316,43 @@ if __name__ == '__main__':
 
         table = wandb.Table(data=[[func_name, initial_position, min_f_val, achieved_min_val, min_f_coords, achieved_min_coord]], columns=summary_columns)
         if TRACK: wandb.log({'summary results': table})
-        # plot optimization trace
+        
+        # plot and log optimization trace
+        trace_x = trace[:,0]
+        trace_y = trace[:,1]
+        min_ = evaluation_variables[func_name]['eval_min'] if evaluation_variables[func_name]['eval_min'] < math.ceil(trace_x.min()) else math.ceil(trace_x.min())
+        max_ = evaluation_variables[func_name]['eval_max'] if evaluation_variables[func_name]['eval_max'] > math.ceil(trace_x.max()) else math.ceil(trace_x.max())
+        x = np.linspace(min_, max_, 100)
+        y = np.linspace(min_, max_, 100)
+        X, Y = np.meshgrid(x, y)
+        vec_array = jnp.stack((X, Y), axis=2)
+        Z = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
+                vec = np.array([X[i, j], Y[i, j]])  # Create a 2D vector from meshgrid values
+                Z[i, j] = test_func.evaluate(vec)  # Compute z and store it in the corresponding position
+        plt.clf()
+        plt.cla()
+        plt.close()
+        plt.imshow(Z, extent=[math.ceil(x.min()), math.ceil(x.max()), math.ceil(y.min()), math.ceil(y.max())], origin='lower', cmap='viridis')
+        plt.colorbar()
+        # Plot the optimization trace
+        plt.scatter(trace_x, trace_y, cmap="black", edgecolors='black')
+        plt.scatter(min_f_coords[0], min_f_coords[1], marker="*")
+        # Plot arrows to show the evolution of the trace
+        for i in range(len(trace_x) - 1):
+            plt.arrow(
+                trace_x[i],
+                trace_y[i],
+                trace_x[i + 1] - trace_x[i],
+                trace_y[i + 1] - trace_y[i],
+                head_width=0,
+                color='red'
+            )
 
+        plt.title("Optimization Trace on Function Heatmap")
+        plt.xlabel("X")
+        plt.ylabel("Y")
+        plt.savefig(f"{func_name}.png", dpi=300)
+        if TRACK: wandb.log({"Optimization Traces": wandb.Image(f"{func_name}.png")})
         wandb.finish()

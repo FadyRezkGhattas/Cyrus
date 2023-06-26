@@ -1,15 +1,15 @@
 import jax.numpy as jnp
 
 evaluation_variables = {
-    "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 2},
-    "Matyas": {"dim" : 2},
-    "Booth": {"dim" : 2},
-    "Rosenbrock": {"dim" : 2},
-    "Michalewicz": {"dim" : 2},
-    "Beale": {},
-    "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi)},
-    "StyblinskiTang": {"dim" : 2},
-    "Rastrigin": {"dim" : 2}
+    "Ackley": {"a": 20, "b": 0.2, "c": 2*jnp.pi, "dim" : 2, "eval_min": -32.768, "eval_max": 32.768},
+    "Matyas": {"dim" : 2, "eval_min": -10, "eval_max": 10},
+    "Booth": {"dim" : 2, "eval_min": -10, "eval_max": 10},
+    "Rosenbrock": {"dim" : 2, "eval_min": -2.048, "eval_max": 2.048},
+    "Michalewicz": {"dim" : 2, "eval_mind": 0, "eval_max": jnp.pi},
+    "Beale": {"eval_min": -4.5, "eval_max": 4.5},
+    "Branin": {"a": 1, "b": 5.1/(4*jnp.pi**2), "c": 5/jnp.pi, "r": 6, "s": 10, "t": 1/(8*jnp.pi), "eval_min": -5, "eval_max": 15},
+    "StyblinskiTang": {"dim" : 2, "eval_min": -5, "eval_max": 5},
+    "Rastrigin": {"dim" : 2, "eval_min": -5.12, "eval_max": 5.12}
 }
 minimum_value = {
     "Ackley": 0,
