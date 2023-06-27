@@ -33,7 +33,8 @@ class LinearTrainer(VeloTrainerModule):
             grads = jnp.concatenate([jnp.ravel(grad) for grad in grads])
             updates = jnp.concatenate([jnp.ravel(update) for update in updates])
             update_direction = jnp.dot(grads, updates)
-            metrics = {'loss': loss, 'update_direction': update_direction}
+            cosine_similarity = update_direction / (jnp.linalg.norm(updates)*jnp.linalg.norm(grads))
+            metrics = {'loss': loss, 'update_direction': update_direction, 'cosine_similarity': cosine_similarity}
             return state, metrics
         
         def eval_step(state, batch):
@@ -73,7 +74,8 @@ class LinearClassifierTrainer(LinearTrainer):
             grads = jnp.concatenate([jnp.ravel(grad) for grad in grads])
             updates = jnp.concatenate([jnp.ravel(update) for update in updates])
             update_direction = jnp.dot(grads, updates)
-            metrics = {'loss': loss, 'accuracy': acc, 'update_direction': update_direction}
+            cosine_similarity = update_direction / (jnp.linalg.norm(updates)*jnp.linalg.norm(grads))
+            metrics = {'loss': loss, 'accuracy': acc, 'update_direction': update_direction, 'cosine_similarity': cosine_similarity}
             return state, metrics
         
         def eval_step(state, batch):

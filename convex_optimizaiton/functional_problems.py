@@ -329,8 +329,13 @@ if __name__ == '__main__':
             loss, grad = grad_fn(params)
             trace[step] = np.concatenate((jax.device_get(params), [jax.device_get(loss)]))
             updates, opt_state = opt.update(grad, opt_state, params=params, extra_args={"loss": loss})
+            update_direction = jnp.dot(grad, updates)
+            cosine_similarity = update_direction / (jnp.linalg.norm(updates)*jnp.linalg.norm(grad))
             params = optax.apply_updates(params, updates)
-            if TRACK: wandb.log({"function value": loss})
+            if TRACK:
+                wandb.log({"function value": loss})
+                wandb.log({"update direction": update_direction})
+                wandb.log({"cosine similarity": cosine_similarity})
         
         # LOGGING
         # summary table
