@@ -42,7 +42,7 @@ if __name__ == '__main__':
     # informative features (ill-conditioned)
     n_informative = math.ceil(args.n_features / 10)
     for batch_size in [int(args.n_samples/10), int(args.n_samples/2), args.n_samples]:
-        exp_name = f"n_info_{n_informative}/{args.n_features}_samples_{args.n_samples}_batch_{batch_size}"
+        exp_name = f"n_info_{n_informative}/{args.n_features}_batch_{batch_size}/{args.n_samples}"
         X, Y = make_regression(n_samples=args.n_samples, n_features=args.n_features, n_informative=n_informative, random_state=args.seed, noise=0.1)
         train_data_dataloader = ScikitDatastToDataLoader(X, Y, batch_size)
         trainer = LinearTrainer(LinearModel,
@@ -90,7 +90,7 @@ if __name__ == '__main__':
                                         'wandb_entity': args.wandb_entity
                                     },
                                     exmp_input=next(iter(train_data_dataloader)),
-                                    run_name=f"{name}_batch_{batch_size}",
+                                    run_name=f"{name}_batch_{batch_size}/{sample_size}",
                                     extra_args=args)
             trainer.train_model(
                 train_loader=train_data_dataloader,
@@ -119,7 +119,7 @@ if __name__ == '__main__':
                                         'wandb_entity': args.wandb_entity
                                     },
                                     exmp_input=next(iter(train_data_dataloader)),
-                                    run_name=f"{name}_batch_{batch_size}",
+                                    run_name=f"{name}_batch_{batch_size}/{sample_size}",
                                     extra_args=args)
             trainer.train_model(
                 train_loader=train_data_dataloader,
