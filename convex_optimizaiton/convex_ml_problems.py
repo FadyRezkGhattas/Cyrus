@@ -104,7 +104,7 @@ if __name__ == '__main__':
         X, Y = dataset(return_X_y=True)
         sample_size = X.shape[0]
         for batch_size in [int(sample_size/2), int(sample_size/10), sample_size]:
-            train_data_dataloader = ScikitDatastToDataLoader(X, Y, X.shape[0])
+            train_data_dataloader = ScikitDatastToDataLoader(X, Y, batch_size)
             trainer = LinearTrainer(LinearModel,
                                     seed = args.seed,
                                     model_hparams={
