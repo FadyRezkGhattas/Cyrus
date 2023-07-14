@@ -333,6 +333,7 @@ if __name__ == '__main__':
             cosine_similarity = update_direction / (jnp.linalg.norm(updates)*jnp.linalg.norm(grad))
             params = optax.apply_updates(params, updates)
             if TRACK:
+                wandb.log({"step/step": step})
                 wandb.log({"function value": loss})
                 wandb.log({"update direction": update_direction})
                 wandb.log({"cosine similarity": cosine_similarity})
