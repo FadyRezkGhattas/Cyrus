@@ -56,7 +56,7 @@ class OptaxWrapper(optax.GradientTransformation):
 
 def get_optax_velo(num_steps,
                     weight_decay=0.0,
-                    max_training_steps=150_000,
+                    max_training_steps=200_000,
                     base_lopt_fn=_default_lopt_fn):
     opt = LearnedOptimizer(
       num_steps,
