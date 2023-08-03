@@ -11,7 +11,7 @@ import gin
 import jax
 import optax
 import chex
-from hyper_v2 import HyperV2
+from VeLO.hyper_v2 import HyperV2
 from learned_optimization import checkpoints
 from learned_optimization import filesystem
 from learned_optimization import summary
@@ -25,11 +25,11 @@ class OptaxWrapper(optax.GradientTransformation):
         self.opt = opt
         self.num_steps = num_steps
 
-    def init(self, params: chex.ArrayTree,
+    def init(self, tx_params: chex.ArrayTree, params: chex.ArrayTree,
               *,
               extra_args: Optional[Mapping[str, Any]] = None) -> chex.ArrayTree:
         del extra_args
-        opt_state = self.opt.init(params, num_steps=self.num_steps)
+        opt_state = self.opt.init(tx_params, params, num_steps=self.num_steps)
         if dataclasses.is_dataclass(opt_state):
             return self.opt.set_params(opt_state, ())
         else:
