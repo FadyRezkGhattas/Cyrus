@@ -2,7 +2,7 @@
 from setuptools import setup
 
 setup(
-    name="project_name",
+    name="Cyrus",
     version="0.1",
     description="project_description",
     url="https://github.com/FadyRezkGhattas/Cyrus",
