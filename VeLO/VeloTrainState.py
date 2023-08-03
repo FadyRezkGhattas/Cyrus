@@ -8,6 +8,12 @@ from flax import struct, core
 from flax.training.train_state import TrainState
 
 class VeloState(TrainState):
+    # parameters for meta model
+    tx_params : core.FrozenDict[str, Any] = struct.field(pytree_node=True)
+    # optimizer for meta-model
+    meta_tx : optax.GradientTransformation = struct.field(pytree_node=False)
+    # optimizer state for meta-model optimizer
+    meta_opt_state : optax.OptState = struct.field(pytree_node=True)
     # A simple extension of TrainState to also include batch statistics
     # If a model has no batch statistics, it is None
     batch_stats : Any = None
@@ -16,12 +22,6 @@ class VeloState(TrainState):
     rng : Any = None
     # add args to access some global hyperparameters
     args : Any = None
-    # parameters for meta model
-    tx_params : core.FrozenDict[str, Any] = struct.field(pytree_node=True)
-    # optimizer for meta-model
-    meta_tx : optax.GradientTransformation = struct.field(pytree_node=False)
-    # optimizer state for meta-model optimizer
-    meta_opt_state : optax.OptState = struct.field(pytree_node=True)
 
     def clip_grads(self, *, grads, max_grad_norm):
         # Clipping gradients as implemented here: https://github.com/deepmind/optax/blob/master/optax/_src/clipping.py#L91
