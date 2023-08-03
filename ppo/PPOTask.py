@@ -173,6 +173,20 @@ class PPOTask():
         return loss, (pg_loss, v_loss, entropy_loss, jax.lax.stop_gradient(approx_kl))
 
     @partial(jax.jit, static_argnums=(0,))
+    def update_minibatch(self, carry, minibatch):
+        meta_params, agent_state = carry
+        (loss, (pg_loss, v_loss, entropy_loss, approx_kl)), grads = self.ppo_loss_grad_fn(
+            agent_state.params,
+            minibatch.obs,
+            minibatch.actions,
+            minibatch.logprobs,
+            minibatch.advantages,
+            minibatch.returns,
+        )
+        agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=self.args.max_grad_norm)
+        return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
+
+    @partial(jax.jit, static_argnums=(0,))
     def update_ppo(self,
         meta_params,
         agent_state: TrainState,
@@ -195,22 +209,8 @@ class PPOTask():
             flatten_storage = jax.tree_map(flatten, storage)
             shuffled_storage = jax.tree_map(convert_data, flatten_storage)
 
-            def update_minibatch(carry, minibatch):
-                meta_params, agent_state = carry
-                (loss, (pg_loss, v_loss, entropy_loss, approx_kl)), grads = self.ppo_loss_grad_fn(
-                    agent_state.params,
-                    minibatch.obs,
-                    minibatch.actions,
-                    minibatch.logprobs,
-                    minibatch.advantages,
-                    minibatch.returns,
-                )
-                # TODO: do whatever with gradients here
-                agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=self.args.max_grad_norm)
-                return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
-
             (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-                update_minibatch, (meta_params, agent_state), shuffled_storage
+                self.update_minibatch, (meta_params, agent_state), shuffled_storage
             )
             return (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
