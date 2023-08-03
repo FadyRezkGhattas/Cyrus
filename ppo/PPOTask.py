@@ -174,12 +174,13 @@ class PPOTask():
 
     @partial(jax.jit, static_argnums=(0,))
     def update_ppo(self,
+        meta_params,
         agent_state: TrainState,
         storage: Storage,
         key: jax.random.PRNGKey,
     ):
         def update_epoch(carry, unused_inp):
-            agent_state, key = carry
+            meta_params, agent_state, key = carry
             key, subkey = jax.random.split(key)
 
             def flatten(x):
@@ -194,7 +195,8 @@ class PPOTask():
             flatten_storage = jax.tree_map(flatten, storage)
             shuffled_storage = jax.tree_map(convert_data, flatten_storage)
 
-            def update_minibatch(agent_state, minibatch):
+            def update_minibatch(carry, minibatch):
+                meta_params, agent_state = carry
                 (loss, (pg_loss, v_loss, entropy_loss, approx_kl)), grads = self.ppo_loss_grad_fn(
                     agent_state.params,
                     minibatch.obs,
@@ -204,16 +206,16 @@ class PPOTask():
                     minibatch.returns,
                 )
                 # TODO: do whatever with gradients here
-                agent_state = agent_state.apply_gradients(grads=grads, loss=loss, max_grad_norm=self.args.max_grad_norm)
-                return agent_state, (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
+                agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=self.args.max_grad_norm)
+                return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
-            agent_state, (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-                update_minibatch, agent_state, shuffled_storage
+            (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+                update_minibatch, (meta_params, agent_state), shuffled_storage
             )
-            return (agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
+            return (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
-        (agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            update_epoch, (agent_state, key), (), length=self.args.update_epochs
+        (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+            update_epoch, (meta_params, agent_state, key), (), length=self.args.update_epochs
         ) #return the grads here if needed? If args.update_epochs is 4 and the minibatches are 4, then we have (4, 4, grads_shape)
         # critic dense_0 bias is for example has shape of (4,4,1)
         return agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key
@@ -224,7 +226,7 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    def update(self, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+    def update(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
@@ -232,6 +234,7 @@ class PPOTask():
         storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
 
         agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
+            meta_params,
             agent_state,
             storage,
             key,

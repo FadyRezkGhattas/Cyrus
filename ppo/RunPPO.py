@@ -74,7 +74,7 @@ if __name__ == '__main__':
     global_step = 0
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
-        agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl = ppo_task.update(agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl = ppo_task.update(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         global_step += args.num_steps * args.num_envs
         avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))

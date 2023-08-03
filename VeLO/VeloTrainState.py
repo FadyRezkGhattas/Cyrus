@@ -12,8 +12,6 @@ class VeloState(struct.PyTreeNode):
     params: core.FrozenDict[str, Any] = struct.field(pytree_node=True)
     tx: optax.GradientTransformation = struct.field(pytree_node=False)
     opt_state: optax.OptState = struct.field(pytree_node=True)
-    # parameters for meta model
-    tx_params : core.FrozenDict[str, Any] = struct.field(pytree_node=True)
     # A simple extension of TrainState to also include batch statistics
     # If a model has no batch statistics, it is None
     batch_stats : Any = None
@@ -33,7 +31,6 @@ class VeloState(struct.PyTreeNode):
             params=params,
             tx=tx,
             opt_state=opt_state,
-            tx_params=tx_params,
             **kwargs,
         )
 
@@ -47,12 +44,12 @@ class VeloState(struct.PyTreeNode):
             return jax.lax.select(trigger, t, (t / g_norm.astype(t.dtype)) * max_grad_norm)
         grads = jax.tree_util.tree_map(clip_fn, grads)
 
-    def apply_gradients(self, *, grads, loss, max_grad_norm, **kwargs):
+    def apply_gradients(self, *, grads, tx_params, loss, max_grad_norm, **kwargs):
         if max_grad_norm != None:
             self.clip_grads(grads=grads, max_grad_norm=max_grad_norm)
     
         # Change update signature to pass loss as expected by VeLO
-        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, self.tx_params, extra_args={"loss": loss})
+        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, tx_params, extra_args={"loss": loss})
         new_params = optax.apply_updates(self.params, updates)
         
         return self.replace(
