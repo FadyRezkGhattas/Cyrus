@@ -26,14 +26,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
-            "args": [
-                "--wandb-project-name",
-                "test_space",
-                "--add-weight-decay",
-                "--weight-decay",
-                "1e-4"
-            ]
+            "justMyCode": true
         }
     ]
 }

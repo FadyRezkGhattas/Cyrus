@@ -1,22 +1,14 @@
 import random
 import time
-from distutils.util import strtobool
-from functools import partial
-from typing import Any
-import dataclasses as dc
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-import optax
-import chex
-from learned_optimization.research.general_lopt import prefab
-from flax.training.train_state import TrainState
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 from PPOTask import *
-from VeLO import get_optax_velo
-from VeloTrainState import VeloState
+from VeLO.LoadVeLO import get_optax_velo
+from VeLO.VeloTrainState import VeloState
 
 if __name__ == '__main__':
     args = parse_args()
@@ -70,10 +62,12 @@ if __name__ == '__main__':
     params, key = ppo_task.init(key)
 
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
+    lopt, meta_params = get_optax_velo(total_steps)
     agent_state = VeloState.create(
         apply_fn=None,
         params=params,
-        tx=get_optax_velo(total_steps)
+        tx=lopt,
+        tx_params=meta_params,
     )
 
     start_time = time.time()

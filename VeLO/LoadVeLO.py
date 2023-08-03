@@ -29,7 +29,8 @@ class OptaxWrapper(optax.GradientTransformation):
               *,
               extra_args: Optional[Mapping[str, Any]] = None) -> chex.ArrayTree:
         del extra_args
-        opt_state = self.opt.init(tx_params, params, num_steps=self.num_steps)
+        key = jax.random.PRNGKey(0)
+        opt_state = self.opt.init(tx_params, params, num_steps=self.num_steps, key=key)
         if dataclasses.is_dataclass(opt_state):
             return self.opt.set_params(opt_state, ())
         else:
@@ -54,7 +55,9 @@ class OptaxWrapper(optax.GradientTransformation):
         else:
             raise NotImplementedError("Only flax dataclasses are supported!")
 
-        next_state = self.opt.update(meta_params, state, updates, **extra_args)
+        key = jax.random.PRNGKey(0)
+    
+        next_state = self.opt.update(meta_params, state, updates, key=key, **extra_args)
 
         step = tree_utils.tree_sub(self.opt.get_params(next_state), params)
 

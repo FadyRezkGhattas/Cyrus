@@ -204,7 +204,6 @@ class PPOTask():
                     minibatch.returns,
                 )
                 # TODO: do whatever with gradients here
-                #TODO: maybe send theta to apply_gradients as it comes from the agent_state. then theta can be something that is sent as kwargs to VeloState to be replaced?
                 agent_state = agent_state.apply_gradients(grads=grads, loss=loss, max_grad_norm=self.args.max_grad_norm)
                 return agent_state, (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
