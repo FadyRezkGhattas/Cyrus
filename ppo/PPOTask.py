@@ -227,6 +227,7 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
+    @partial(jax.jit, static_argnums=(0,))
     def update(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
@@ -234,11 +235,15 @@ class PPOTask():
         
         storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
 
-        agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
+        (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+            self.update_epoch, (meta_params, agent_state, storage, key), (), length=self.args.update_epochs
+        )
+
+        '''agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
             meta_params,
             agent_state,
             storage,
             key,
-        )
+        )'''
 
         return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl
