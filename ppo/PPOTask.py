@@ -43,7 +43,7 @@ class PPOTask():
         self.network.apply = jax.jit(self.network.apply)
         self.actor.apply = jax.jit(self.actor.apply)
         self.critic.apply = jax.jit(self.critic.apply)
-        self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
+        self.ppo_loss_grad_fn = jax.jit(jax.value_and_grad(self.ppo_loss, has_aux=True))
         self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
         # Initialize Agent
