@@ -1,19 +1,19 @@
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
 import optax
 import chex
 from flax import struct, core
-from flax.training.train_state import TrainState
 
-class VeloState(TrainState):
+class VeloState(struct.PyTreeNode):
+    step: int
+    apply_fn: Callable = struct.field(pytree_node=False)
+    params: core.FrozenDict[str, Any] = struct.field(pytree_node=True)
+    tx: optax.GradientTransformation = struct.field(pytree_node=False)
+    opt_state: optax.OptState = struct.field(pytree_node=True)
     # parameters for meta model
     tx_params : core.FrozenDict[str, Any] = struct.field(pytree_node=True)
-    # optimizer for meta-model
-    meta_tx : optax.GradientTransformation = struct.field(pytree_node=False)
-    # optimizer state for meta-model optimizer
-    meta_opt_state : optax.OptState = struct.field(pytree_node=True)
     # A simple extension of TrainState to also include batch statistics
     # If a model has no batch statistics, it is None
     batch_stats : Any = None
@@ -22,6 +22,20 @@ class VeloState(TrainState):
     rng : Any = None
     # add args to access some global hyperparameters
     args : Any = None
+
+    @classmethod
+    def create(cls, *, apply_fn, params, tx, tx_params, **kwargs):
+        """Creates a new instance with `step=0` and initialized `opt_state`."""
+        opt_state = tx.init(tx_params, params)
+        return cls(
+            step=0,
+            apply_fn=apply_fn,
+            params=params,
+            tx=tx,
+            opt_state=opt_state,
+            tx_params=tx_params,
+            **kwargs,
+        )
 
     def clip_grads(self, *, grads, max_grad_norm):
         # Clipping gradients as implemented here: https://github.com/deepmind/optax/blob/master/optax/_src/clipping.py#L91
@@ -45,18 +59,5 @@ class VeloState(TrainState):
             step = self.step + 1,
             params = new_params,
             opt_state = new_opt_state,
-            **kwargs
-        )
-    
-    def apply_meta_gradients(self, *, meta_grads, meta_max_grad_norm = None, **kwargs):
-        if meta_max_grad_norm != None:
-            self.clip_grads(grads=meta_grads, max_grad_norm=meta_max_grad_norm)
-        # Change update signature to pass loss as expected by VeLO
-        updates, new_meta_opt_state = self.meta_tx.update(meta_grads, self.meta_opt_state, self.tx_params)
-        new_meta_params = optax.apply_updates(self.tx_params, updates)
-        
-        return self.replace(
-            tx_params = new_meta_params,
-            meta_opt_state = new_meta_opt_state,
             **kwargs
         )
