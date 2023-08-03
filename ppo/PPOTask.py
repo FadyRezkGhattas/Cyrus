@@ -187,35 +187,36 @@ class PPOTask():
         return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
     @partial(jax.jit, static_argnums=(0,))
+    def update_epoch(self, carry, unused_inp):
+        meta_params, agent_state, storage, key = carry
+        key, subkey = jax.random.split(key)
+
+        def flatten(x):
+            return x.reshape((-1,) + x.shape[2:])
+        
+        # taken from: https://github.com/google/brax/blob/main/brax/training/agents/ppo/train.py
+        def convert_data(x: jnp.ndarray):
+            x = jax.random.permutation(subkey, x)
+            x = jnp.reshape(x, (self.args.num_minibatches, -1) + x.shape[1:])
+            return x
+        
+        flatten_storage = jax.tree_map(flatten, storage)
+        shuffled_storage = jax.tree_map(convert_data, flatten_storage)
+        
+        (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+            self.update_minibatch, (meta_params, agent_state), shuffled_storage
+        )
+        return (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
+    
+    @partial(jax.jit, static_argnums=(0,))
     def update_ppo(self,
         meta_params,
         agent_state: TrainState,
         storage: Storage,
         key: jax.random.PRNGKey,
     ):
-        def update_epoch(carry, unused_inp):
-            meta_params, agent_state, key = carry
-            key, subkey = jax.random.split(key)
-
-            def flatten(x):
-                return x.reshape((-1,) + x.shape[2:])
-
-            # taken from: https://github.com/google/brax/blob/main/brax/training/agents/ppo/train.py
-            def convert_data(x: jnp.ndarray):
-                x = jax.random.permutation(subkey, x)
-                x = jnp.reshape(x, (self.args.num_minibatches, -1) + x.shape[1:])
-                return x
-
-            flatten_storage = jax.tree_map(flatten, storage)
-            shuffled_storage = jax.tree_map(convert_data, flatten_storage)
-
-            (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-                self.update_minibatch, (meta_params, agent_state), shuffled_storage
-            )
-            return (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
-
-        (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            update_epoch, (meta_params, agent_state, key), (), length=self.args.update_epochs
+        (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+            self.update_epoch, (meta_params, agent_state, storage, key), (), length=self.args.update_epochs
         ) #return the grads here if needed? If args.update_epochs is 4 and the minibatches are 4, then we have (4, 4, grads_shape)
         # critic dense_0 bias is for example has shape of (4,4,1)
         return agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key
