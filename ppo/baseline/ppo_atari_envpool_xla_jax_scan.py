@@ -30,7 +30,7 @@ class VeloState(TrainState):
     # Strange initialization because mutable jaxlib.xla_extension.ArrayImpl is not allowed (must use default_factory): https://github.com/google/jax/issues/14295
     loss : Any = dc.field(default_factory=lambda: jnp.asarray(0))
 
-    def apply_gradients(self, *, grads, **kwargs):
+    def apply_gradients(self, *, grads, loss, **kwargs):
         # Clipping gradients as implemented here: https://github.com/deepmind/optax/blob/master/optax/_src/clipping.py#L91
         # replicating logic to avoid editing the chain operation to accept extra_args as velo expects
         g_norm = optax.global_norm(grads)
@@ -41,7 +41,7 @@ class VeloState(TrainState):
         grads = jax.tree_util.tree_map(clip_fn, grads)
     
         # Change update signature to pass loss as expected by VeLO
-        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": self.loss})
+        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params, extra_args={"loss": loss})
         new_params = optax.apply_updates(self.params, updates)
         
         return self.replace(
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                 actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
                 critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()]))),
             ),
-            tx=prefab.optax_lopt(total_steps)
+            tx=prefab.optax_lopt(total_steps, max_training_steps=200_000)
         )
     else:
         agent_state = TrainState.create(
