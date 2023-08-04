@@ -229,7 +229,8 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     @partial(jax.jit, static_argnums=(0,))
-    def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+    def inner_epoch(self, carry, unused_t):
+        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle = carry
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
