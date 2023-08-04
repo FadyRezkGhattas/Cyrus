@@ -151,6 +151,7 @@ class PPOTask():
         )
         return storage
 
+    @partial(jax.jit, static_argnums=(0,))
     def ppo_loss(self, params, x, a, logp, mb_advantages, mb_returns):
         newlogprob, entropy, newvalue = self.get_action_and_value2(params, x, a)
         logratio = newlogprob - logp
@@ -228,7 +229,7 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     @partial(jax.jit, static_argnums=(0,))
-    def update(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+    def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
@@ -239,11 +240,7 @@ class PPOTask():
             self.update_epoch, (meta_params, agent_state, storage, key), (), length=self.args.update_epochs
         )
 
-        '''agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key = self.update_ppo(
-            meta_params,
-            agent_state,
-            storage,
-            key,
-        )'''
+        return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
+    
 
         return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl
