@@ -70,14 +70,27 @@ if __name__ == '__main__':
         tx_params=meta_params,
     )
 
-    
+    meta_optimizer = optax.chain(
+      optax.clip(1),
+      optax.adam(1e-3)
+    )
+    meta_optimizer_state = meta_optimizer.init(meta_params)
+
+    meta_loss_grad_fn = jax.value_and_grad(ppo_task.meta_loss, has_aux=True)
 
     start_time = time.time()
     global_step = 0
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
-        meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
+        #meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+
+        ret, meta_grads = meta_loss_grad_fn(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        meta_loss, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
+
+        meta_param_update, meta_optimizer_state = meta_optimizer.update(meta_grads, meta_optimizer_state)
+        meta_params = optax.apply_updates(meta_params, meta_param_update)
+        
         for inner_epoch in range(args.num_inner_epochs):
             global_step += args.num_steps * args.num_envs
             avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))

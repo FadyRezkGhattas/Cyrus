@@ -244,15 +244,9 @@ class PPOTask():
         def flatten(x):
             return x.reshape((-1,) + x.shape[2:])
         
-        # taken from: https://github.com/google/brax/blob/main/brax/training/agents/ppo/train.py
-        def convert_data(x: jnp.ndarray):
-            x = jax.random.permutation(subkey, x)
-            x = jnp.reshape(x, (self.args.num_minibatches, -1) + x.shape[1:])
-            return x
-        
         flatten_storage = jax.tree_map(flatten, storage)
         
-        meta_loss = self.ppo_loss(
+        meta_loss, ret = self.ppo_loss(
             agent_state.params,
             flatten_storage.obs,
             flatten_storage.actions,
