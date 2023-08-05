@@ -81,7 +81,6 @@ class PPOTask():
         )
         return ((agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage)
     
-    @partial(jax.jit, static_argnums=(0,))
     def get_action_and_value(self,
             agent_state: TrainState,
             next_obs: np.ndarray,
@@ -99,7 +98,6 @@ class PPOTask():
         value = self.critic.apply(agent_state.params.critic_params, hidden)
         return action, logprob, value.squeeze(1), key
         
-    @partial(jax.jit, static_argnums=(0,))
     def get_action_and_value2(self,
         params: flax.core.FrozenDict,
         x: np.ndarray,
@@ -126,7 +124,6 @@ class PPOTask():
         advantages = delta + gamma * gae_lambda * nextnonterminal * advantages
         return advantages, advantages
     
-    @partial(jax.jit, static_argnums=(0,))
     def compute_gae(self,
         agent_state: TrainState,
         next_obs: np.ndarray,
@@ -151,7 +148,6 @@ class PPOTask():
         )
         return storage
 
-    @partial(jax.jit, static_argnums=(0,))
     def ppo_loss(self, params, x, a, logp, mb_advantages, mb_returns):
         newlogprob, entropy, newvalue = self.get_action_and_value2(params, x, a)
         logratio = newlogprob - logp
@@ -173,7 +169,6 @@ class PPOTask():
         loss = pg_loss - self.args.ent_coef * entropy_loss + v_loss * self.args.vf_coef
         return loss, (pg_loss, v_loss, entropy_loss, jax.lax.stop_gradient(approx_kl))
 
-    @partial(jax.jit, static_argnums=(0,))
     def update_minibatch(self, carry, minibatch):
         meta_params, agent_state = carry
         (loss, (pg_loss, v_loss, entropy_loss, approx_kl)), grads = self.ppo_loss_grad_fn(
@@ -187,7 +182,6 @@ class PPOTask():
         agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=self.args.max_grad_norm)
         return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
-    @partial(jax.jit, static_argnums=(0,))
     def update_epoch(self, carry, unused_inp):
         meta_params, agent_state, storage, key = carry
         key, subkey = jax.random.split(key)
@@ -209,19 +203,6 @@ class PPOTask():
         )
         return (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
     
-    @partial(jax.jit, static_argnums=(0,))
-    def update_ppo(self,
-        meta_params,
-        agent_state: TrainState,
-        storage: Storage,
-        key: jax.random.PRNGKey,
-    ):
-        (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            self.update_epoch, (meta_params, agent_state, storage, key), (), length=self.args.update_epochs
-        ) #return the grads here if needed? If args.update_epochs is 4 and the minibatches are 4, then we have (4, 4, grads_shape)
-        # critic dense_0 bias is for example has shape of (4,4,1)
-        return agent_state, loss, pg_loss, v_loss, entropy_loss, approx_kl, key
-
     def rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
             self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps
