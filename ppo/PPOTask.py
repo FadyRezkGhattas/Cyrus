@@ -243,5 +243,42 @@ class PPOTask():
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
+    @partial(jax.jit, static_argnums=(0,))
+    def meta_loss(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+        # Inner-Loop: Agent Learning
+        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
+            f=self.inner_epoch,
+            init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
+            length=self.args.num_inner_epochs,
+            xs=None
+        )
+        # Outer-Loop (meta-loss)
+        # rollout for batch_size (1024) which comes from num_steps * num_envs
+        agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
+            agent_state, episode_stats, next_obs, terminated, truncated, key, handle
+        )
+        storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
 
-        return agent_state, key, episode_stats, next_obs, terminated, truncated, handle, loss, pg_loss, v_loss, entropy_loss, approx_kl
+        key, subkey = jax.random.split(key)
+        def flatten(x):
+            return x.reshape((-1,) + x.shape[2:])
+        
+        # taken from: https://github.com/google/brax/blob/main/brax/training/agents/ppo/train.py
+        def convert_data(x: jnp.ndarray):
+            x = jax.random.permutation(subkey, x)
+            x = jnp.reshape(x, (self.args.num_minibatches, -1) + x.shape[1:])
+            return x
+        
+        flatten_storage = jax.tree_map(flatten, storage)
+        
+        meta_loss = self.ppo_loss(
+            agent_state.params,
+            flatten_storage.obs,
+            flatten_storage.actions,
+            flatten_storage.logprobs,
+            flatten_storage.advantages,
+            flatten_storage.returns)
+
+        return meta_loss, (agent_state, key,
+                           episode_stats, next_obs, terminated, truncated, handle,
+                           loss, pg_loss, v_loss, entropy_loss, approx_kl)

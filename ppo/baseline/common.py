@@ -60,6 +60,8 @@ def parse_args():
         help="the number of mini-batches")
     parser.add_argument("--update-epochs", type=int, default=4,
         help="the K epochs to update the policy")
+    parser.add_argument("--num-inner-epochs", type=int, default=1,
+        help="if meta-learning, how many epochs to run before meta-updating")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles advantages normalization")
     parser.add_argument("--clip-coef", type=float, default=0.1,
