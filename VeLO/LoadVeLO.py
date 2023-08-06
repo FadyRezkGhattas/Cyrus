@@ -44,16 +44,27 @@ class OptaxWrapper(optax.GradientTransformation):
             *,
             extra_args: Optional[Mapping[str, Any]] = None
         ) -> Tuple[chex.ArrayTree, chex.ArrayTree]:
-        if extra_args is None:
-            extra_args = {}
+        # First conditional: Handling extra_args
+        def true_fn_1(_):
+            return {}
+        def false_fn_1(extra_args):
+            return extra_args
+        extra_args = jax.lax.cond(extra_args is None, true_fn_1, false_fn_1, extra_args)
 
-        if params is None:
+        # Second conditional: Checking if params is None
+        def true_fn_2(_):
             raise ValueError("Params must not be None!")
+        def false_fn_2(params):
+            return params
+        params = jax.lax.cond(params is None, true_fn_2, false_fn_2, params)
 
-        if dataclasses.is_dataclass(state):
-            state = self.opt.set_params(state, params)
-        else:
+        # Third conditional: Checking dataclasses.is_dataclass(state)
+        def true_fn_3(args):
+            return self.opt.set_params(args[0], args[1])
+        def false_fn_3(_):
             raise NotImplementedError("Only flax dataclasses are supported!")
+        args_for_cond_3 = (state, params)
+        state = jax.lax.cond(dataclasses.is_dataclass(state), true_fn_3, false_fn_3, args_for_cond_3)
 
         key = jax.random.PRNGKey(0)
     
