@@ -263,7 +263,7 @@ if __name__ == '__main__':
     #@jax.jit
     def agent_update_and_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         """Agent learning: update agent params"""
-        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
+        (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
             f=training_step,
             init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
             length=1,
@@ -285,7 +285,7 @@ if __name__ == '__main__':
             storage.advantages,
             storage.returns)
         
-        return meta_loss, (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl)
+        return meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl)
 
     def meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state):
         ret, meta_grads = jax.value_and_grad(agent_update_and_meta_loss, has_aux=True)(
