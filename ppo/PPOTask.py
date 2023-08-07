@@ -210,6 +210,13 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     @partial(jax.jit, static_argnums=(0,))
+    def meta_rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
+        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
+            self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps // self.args.num_envs
+        )
+        return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
+        
+    @partial(jax.jit, static_argnums=(0,))
     def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
@@ -223,16 +230,13 @@ class PPOTask():
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
-    #@partial(jax.jit, static_argnums=(0,))
     def meta_loss(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         # Inner-Loop: Agent Learning
-        for inner_epoch in self.args.num_inner_epochs:
-            (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = self.inner_epoch(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = self.inner_epoch(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        
         # Outer-Loop (meta-loss)
         # rollout for batch_size (1024) which comes from num_steps * num_envs
-        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
-            self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps // self.args.num_envs
-        )
+        agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.meta_rollout(agent_state, episode_stats, next_obs, terminated, truncated, key, handle)
         storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
 
         key, subkey = jax.random.split(key)

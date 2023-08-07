@@ -83,33 +83,32 @@ if __name__ == '__main__':
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
 
-        #meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
-        ret, meta_grads = meta_loss_grad_fn(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
-        meta_loss, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
+        #ret, meta_grads = meta_loss_grad_fn(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        #meta_loss, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
 
-        meta_param_update, meta_optimizer_state = meta_optimizer.update(meta_grads, meta_optimizer_state)
-        meta_params = optax.apply_updates(meta_params, meta_param_update)
+        #meta_param_update, meta_optimizer_state = meta_optimizer.update(meta_grads, meta_optimizer_state)
+        #meta_params = optax.apply_updates(meta_params, meta_param_update)
         
-        for inner_epoch in range(args.num_inner_epochs):
-            global_step += args.num_steps * args.num_envs
-            avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
-            print(f"global_step={global_step}, avg_episodic_return={avg_episodic_return}")
+        global_step += args.num_steps * args.num_envs
+        avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
+        print(f"global_step={global_step}, avg_episodic_return={avg_episodic_return}")
             
-            # TRY NOT TO MODIFY: record rewards for plotting purposes
-            writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, global_step)
-            writer.add_scalar(
-                "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
-            )
-            if not args.use_velo:
-                writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
-            writer.add_scalar("losses/value_loss", v_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/policy_loss", pg_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/entropy", entropy_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/approx_kl", approx_kl[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/loss", inner_loss[inner_epoch, -1, -1].item(), global_step)
-            print("SPS:", int(global_step / (time.time() - start_time)))
-            writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-            writer.add_scalar(
-                "charts/SPS_update", int(args.num_envs * args.num_steps / (time.time() - update_time_start)), global_step
-            )
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, global_step)
+        writer.add_scalar(
+            "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
+        )
+        if not args.use_velo:
+            writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
+        writer.add_scalar("losses/value_loss", v_loss[-1, -1].item(), global_step)
+        writer.add_scalar("losses/policy_loss", pg_loss[-1, -1].item(), global_step)
+        writer.add_scalar("losses/entropy", entropy_loss[-1, -1].item(), global_step)
+        writer.add_scalar("losses/approx_kl", approx_kl[-1, -1].item(), global_step)
+        writer.add_scalar("losses/loss", inner_loss[-1, -1].item(), global_step)
+        print("SPS:", int(global_step / (time.time() - start_time)))
+        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar(
+            "charts/SPS_update", int(args.num_envs * args.num_steps / (time.time() - update_time_start)), global_step
+        )
