@@ -301,6 +301,13 @@ if __name__ == '__main__':
     global_step = 0
     for _ in range(1000000):
         update_time_start = time.time()
+        # Without meta-learning
+        # (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
+        #    f=training_step,
+        #    init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
+        #    length=1,
+        #    xs=None,
+        #)
         meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl = meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
 
         for inner_epoch in range(args.num_inner_epochs):
