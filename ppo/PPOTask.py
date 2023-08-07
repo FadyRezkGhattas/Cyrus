@@ -210,8 +210,7 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     @partial(jax.jit, static_argnums=(0,))
-    def inner_epoch(self, carry, unused_t):
-        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle = carry
+    def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
@@ -224,15 +223,11 @@ class PPOTask():
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
-    @partial(jax.jit, static_argnums=(0,))
+    #@partial(jax.jit, static_argnums=(0,))
     def meta_loss(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         # Inner-Loop: Agent Learning
-        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
-            f=self.inner_epoch,
-            init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
-            length=self.args.num_inner_epochs,
-            xs=None
-        )
+        for inner_epoch in self.args.num_inner_epochs:
+            (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = self.inner_epoch(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
         # Outer-Loop (meta-loss)
         # rollout for batch_size (1024) which comes from num_steps * num_envs
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
