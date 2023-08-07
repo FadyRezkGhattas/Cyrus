@@ -15,7 +15,7 @@ import numpy as np
 import optax
 import chex
 from learned_optimization.research.general_lopt import prefab
-from flax.training.train_state import TrainState
+from VeLO.VeloTrainState import VeloState
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 
@@ -79,7 +79,7 @@ class PPOTask():
         return ((agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage)
     
     def get_action_and_value(self,
-            agent_state: TrainState,
+            agent_state: VeloState,
             next_obs: np.ndarray,
             key: jax.random.PRNGKey
     ):
@@ -122,7 +122,7 @@ class PPOTask():
         return advantages, advantages
     
     def compute_gae(self,
-        agent_state: TrainState,
+        agent_state: VeloState,
         next_obs: np.ndarray,
         next_done: np.ndarray,
         storage: Storage,
