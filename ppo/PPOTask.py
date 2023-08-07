@@ -206,7 +206,6 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    @partial(jax.jit, static_argnums=(0,))
     def meta_rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
             self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps // self.args.num_envs
