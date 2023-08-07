@@ -260,6 +260,7 @@ if __name__ == '__main__':
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
+    #@jax.jit
     def agent_update_and_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         """Agent learning: update agent params"""
         (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
@@ -301,34 +302,38 @@ if __name__ == '__main__':
     global_step = 0
     for _ in range(1000000):
         update_time_start = time.time()
-        # Without meta-learning
+        # Without meta-learning (this function scans gracefully without recompilation issues)
         # (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
         #    f=training_step,
         #    init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
         #    length=1,
         #    xs=None,
         #)
-        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl = meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
 
-        for inner_epoch in range(args.num_inner_epochs):
-            global_step += args.num_steps * args.num_envs
-            avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
-            print(f"global_step={global_step}, avg_episodic_return={avg_episodic_return}")
-            
-            # TRY NOT TO MODIFY: record rewards for plotting purposes
-            writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, global_step)
-            writer.add_scalar(
-                "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
-            )
-            if not args.use_velo:
-                writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
-            writer.add_scalar("losses/value_loss", v_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/policy_loss", pg_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/entropy", entropy_loss[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/approx_kl", approx_kl[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/meta_loss", meta_loss[inner_epoch, -1, -1].item(), global_step)
-            print("SPS:", int(global_step / (time.time() - start_time)))
-            writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-            writer.add_scalar(
-                "charts/SPS_update", int(args.num_envs * args.num_steps / (time.time() - update_time_start)), global_step
-            )
+        # Without meta-gradients (agent_update_and_meta_loss works gracefully without recompilation issues even when decorated with @jax.jit)
+        meta_loss, (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl) = agent_update_and_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+
+        # Complete meta-learning (OOM)
+        #meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl = meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
+
+        global_step += args.num_steps * args.num_envs
+        avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
+        print(f"global_step={global_step}, avg_episodic_return={avg_episodic_return}")
+        
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("charts/avg_episodic_return", avg_episodic_return, global_step)
+        writer.add_scalar(
+            "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
+        )
+        if not args.use_velo:
+            writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
+        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
+        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
+        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
+        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
+        writer.add_scalar("losses/meta_loss", meta_loss.item(), global_step)
+        print("SPS:", int(global_step / (time.time() - start_time)))
+        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        writer.add_scalar(
+            "charts/SPS_update", int(args.num_envs * args.num_steps / (time.time() - update_time_start)), global_step
+        )
