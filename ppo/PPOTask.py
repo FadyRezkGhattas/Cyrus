@@ -40,10 +40,7 @@ class PPOTask():
         self.params : AgentParams = None
 
         # Set Jitted Functions and Partial Definitions
-        self.network.apply = jax.jit(self.network.apply)
-        self.actor.apply = jax.jit(self.actor.apply)
-        self.critic.apply = jax.jit(self.critic.apply)
-        self.ppo_loss_grad_fn = jax.jit(jax.value_and_grad(self.ppo_loss, has_aux=True))
+        self.ppo_loss_grad_fn = jax.value_and_grad(self.ppo_loss, has_aux=True)
         self.step_once_fn=partial(self.step_once, env_step_fn=step_env_wrapped)
 
         # Initialize Agent
@@ -216,7 +213,6 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
         
-    @partial(jax.jit, static_argnums=(0,))
     def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
