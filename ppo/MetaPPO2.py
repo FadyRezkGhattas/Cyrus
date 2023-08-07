@@ -260,16 +260,48 @@ if __name__ == '__main__':
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
-    start_time = time.time()
-    global_step = 0
-    for _ in range(1000000):
-        update_time_start = time.time()
-        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
+    def agent_update_and_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+        """Agent learning: update agent params"""
+        (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
             f=training_step,
             init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
             length=1,
             xs=None,
         )
+        
+        """Meta learning: update meta params"""
+        # Rollout
+        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
+            step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), args.num_meta_steps
+        )
+
+        storage = jax.tree_map(lambda x: x.reshape((-1,) + x.shape[2:]), storage)
+
+        meta_loss, (pg_loss, v_loss, entropy_loss, approx_kl) = meta_loss_fn(agent_state.params,
+            storage.obs,
+            storage.actions,
+            storage.logprobs,
+            storage.advantages,
+            storage.returns)
+        
+        return meta_loss, (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl)
+
+    def meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state):
+        ret, meta_grads = jax.value_and_grad(agent_update_and_meta_loss, has_aux=True)(
+            meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle
+        )
+        meta_loss, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
+
+        meta_param_update, meta_optim_state = meta_optimizer.update(meta_grads, meta_optim_state)
+        meta_params = optax.apply_updates(meta_params, meta_param_update)
+        
+        return meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl
+
+    start_time = time.time()
+    global_step = 0
+    for _ in range(1000000):
+        update_time_start = time.time()
+        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl = meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
 
         for inner_epoch in range(args.num_inner_epochs):
             global_step += args.num_steps * args.num_envs
@@ -287,7 +319,7 @@ if __name__ == '__main__':
             writer.add_scalar("losses/policy_loss", pg_loss[inner_epoch, -1, -1].item(), global_step)
             writer.add_scalar("losses/entropy", entropy_loss[inner_epoch, -1, -1].item(), global_step)
             writer.add_scalar("losses/approx_kl", approx_kl[inner_epoch, -1, -1].item(), global_step)
-            writer.add_scalar("losses/loss", inner_loss[inner_epoch, -1, -1].item(), global_step)
+            writer.add_scalar("losses/meta_loss", meta_loss[inner_epoch, -1, -1].item(), global_step)
             print("SPS:", int(global_step / (time.time() - start_time)))
             writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
             writer.add_scalar(
