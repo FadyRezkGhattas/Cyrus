@@ -179,8 +179,8 @@ class PPOTask():
         agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=self.args.max_grad_norm)
         return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
-    def update_epoch(self, carry, unused_inp):
-        meta_params, agent_state, storage, key = carry
+    def update_epoch(self, carry, unused_inp, storage):
+        meta_params, agent_state, key = carry
         key, subkey = jax.random.split(key)
 
         def flatten(x):
@@ -198,7 +198,7 @@ class PPOTask():
         (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
             self.update_minibatch, (meta_params, agent_state), shuffled_storage
         )
-        return (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
+        return (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
     
     def rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
@@ -207,15 +207,19 @@ class PPOTask():
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
     @partial(jax.jit, static_argnums=(0,))
-    def inner_epoch(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+    def inner_epoch(self, carry, unused_t):
+        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle = carry
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
             agent_state, episode_stats, next_obs, terminated, truncated, key, handle
         )
         
         storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage)
 
-        (meta_params, agent_state, storage, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            self.update_epoch, (meta_params, agent_state, storage, key), (), length=self.args.update_epochs
+        (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
+            partial(self.update_epoch, storage=storage),
+            init=(meta_params, agent_state, key),
+            xs=None,
+            length=self.args.update_epochs
         )
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
