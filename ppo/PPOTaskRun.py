@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     start_time = time.time()
     global_step = 0
-    ppo_task.inner_epoch = jax.jit(ppo_task.inner_epoch)
+    
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
         (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.inner_epoch(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
