@@ -62,9 +62,9 @@ class MetaPPOTask():
         ), key
     
     @staticmethod
-    def step_once(carry, step, env_step_fn, step_env):
+    def step_once(carry, step, env_step_fn, step_env, network, actor, critic):
         agent_state, episode_stats, obs, terminated, truncated, key, handle = carry
-        action, logprob, value, key = MetaPPOTask.get_action_and_value(agent_state, obs, key)
+        action, logprob, value, key = MetaPPOTask.get_action_and_value(agent_state, obs, key, network, actor, critic)
 
         episode_stats, handle, (next_obs, reward, terminated, truncated, info) = env_step_fn(episode_stats, handle, action, step_env)
         storage = Storage(
@@ -80,11 +80,7 @@ class MetaPPOTask():
         return ((agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage)
     
     @staticmethod
-    def get_action_and_value(
-            agent_state: VeloState,
-            next_obs: np.ndarray,
-            key: jax.random.PRNGKey
-    ):
+    def get_action_and_value(agent_state: VeloState, next_obs: np.ndarray, key: jax.random.PRNGKey, network, actor, critic):
         """sample action, calculate value, logprob, entropy, and update storage"""
         hidden = network.apply(agent_state.params.network_params, next_obs)
         logits = actor.apply(agent_state.params.actor_params, hidden)
@@ -98,11 +94,7 @@ class MetaPPOTask():
         return action, logprob, value.squeeze(1), key
 
     @staticmethod 
-    def get_action_and_value2(
-        params: flax.core.FrozenDict,
-        x: np.ndarray,
-        action: np.ndarray
-    ):
+    def get_action_and_value2(params: flax.core.FrozenDict, x: np.ndarray, action: np.ndarray, network, actor, critic):
         """calculate value, logprob of supplied `action`, and entropy"""
         hidden = network.apply(params.network_params, x)
         logits = actor.apply(params.actor_params, hidden)
@@ -126,12 +118,7 @@ class MetaPPOTask():
         return advantages, advantages
     
     @staticmethod
-    def compute_gae(agent_state: VeloState,
-        next_obs: np.ndarray,
-        next_done: np.ndarray,
-        storage: Storage,
-        args
-    ):
+    def compute_gae(agent_state: VeloState, next_obs: np.ndarray, next_done: np.ndarray, storage: Storage, args, network, actor, critic):
         next_value = critic.apply(
             agent_state.params.critic_params, network.apply(agent_state.params.network_params, next_obs)
         ).squeeze()
@@ -151,8 +138,8 @@ class MetaPPOTask():
         return storage
 
     @staticmethod
-    def ppo_loss(params, x, a, logp, mb_advantages, mb_returns, norm_adv, args):
-        newlogprob, entropy, newvalue = MetaPPOTask.get_action_and_value2(params, x, a)
+    def ppo_loss(params, x, a, logp, mb_advantages, mb_returns, args, network, actor, critic):
+        newlogprob, entropy, newvalue = MetaPPOTask.get_action_and_value2(params, x, a, network, actor, critic)
         logratio = newlogprob - logp
         ratio = jnp.exp(logratio)
         approx_kl = ((ratio - 1) - logratio).mean()
@@ -166,14 +153,14 @@ class MetaPPOTask():
         pg_loss = jnp.maximum(pg_loss1, pg_loss2).mean()
 
         # Value loss
-        v_loss = 0.5 * ((newvalue - args.mb_returns) ** 2).mean()
+        v_loss = 0.5 * ((newvalue - mb_returns) ** 2).mean()
 
         entropy_loss = entropy.mean()
         loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
         return loss, (pg_loss, v_loss, entropy_loss, jax.lax.stop_gradient(approx_kl))
     
     @staticmethod
-    def update_minibatch(carry, minibatch, ppo_loss_grad_fn, args):
+    def update_minibatch(carry, minibatch, ppo_loss_grad_fn, args, network, actor, critic):
         meta_params, agent_state = carry
         (loss, (pg_loss, v_loss, entropy_loss, approx_kl)), grads = ppo_loss_grad_fn(
             agent_state.params,
@@ -182,13 +169,14 @@ class MetaPPOTask():
             minibatch.logprobs,
             minibatch.advantages,
             minibatch.returns,
-            args
+            args,
+            network, actor, critic
         )
         agent_state = agent_state.apply_gradients(grads=grads, tx_params=meta_params, loss=loss, max_grad_norm=args.max_grad_norm)
         return (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
 
     @staticmethod
-    def update_epoch(carry, unused_inp, storage, ppo_loss_grad_fn, args):
+    def update_epoch(carry, unused_inp, storage, ppo_loss_grad_fn, args, network, actor, critic):
         meta_params, agent_state, key = carry
         key, subkey = jax.random.split(key)
 
@@ -205,44 +193,37 @@ class MetaPPOTask():
         shuffled_storage = jax.tree_map(convert_data, flatten_storage)
         
         (meta_params, agent_state), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            partial(MetaPPOTask.update_minibatch, ppo_loss_grad_fn=ppo_loss_grad_fn, args=args),
+            partial(MetaPPOTask.update_minibatch, ppo_loss_grad_fn=ppo_loss_grad_fn, args=args, network=network, actor=actor, critic=critic),
             init=(meta_params, agent_state),
             xs=shuffled_storage
         )
         return (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads)
     
-    def meta_rollout(self, agent_state, episode_stats, next_obs, terminated, truncated, key, handle):
-        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
-            self.step_once_fn, (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), (), self.args.num_steps // self.args.num_envs
-        )
-        return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
-    
     @staticmethod
-    def inner_epoch(carry, unused_t, ppo_loss_grad_fn, step_env, args):
+    def inner_epoch(carry, unused_t, ppo_loss_grad_fn, step_env_wrapped, step_env, args, network, actor, critic):
+        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle = carry
         (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
-            partial(MetaPPOTask.step_once, env_step_fn=step_env_wrapped, step_env=step_env),
+            partial(MetaPPOTask.step_once, env_step_fn=step_env_wrapped, step_env=step_env, network=network, actor=actor, critic=critic),
             (agent_state, episode_stats, next_obs, terminated, truncated, key, handle),
             (),
             length=args.num_steps
         )
         
-        storage = MetaPPOTask.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage, args)
+        storage = MetaPPOTask.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage, args, network, actor, critic)
 
         (meta_params, agent_state, key), (loss, pg_loss, v_loss, entropy_loss, approx_kl, grads) = jax.lax.scan(
-            partial(MetaPPOTask.update_epoch, storage=storage, ppo_loss_grad_fn=ppo_loss_grad_fn, args=args),
+            partial(MetaPPOTask.update_epoch, storage=storage, ppo_loss_grad_fn=ppo_loss_grad_fn, args=args, network=network, actor=actor, critic=critic),
             init=(meta_params, agent_state, key),
             xs=None,
-            length=args.update_epoch
+            length=args.update_epochs
         )
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
     def meta_loss(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         # Inner-Loop: Agent Learning
-        #(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = self.inner_epoch(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
-
         (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
-            partial(MetaPPOTask.inner_epoch, ppo_loss_grad_fn=self.ppo_loss_grad_fn, step_env=self.step_env, args=self.args),
+            partial(MetaPPOTask.inner_epoch, ppo_loss_grad_fn=self.ppo_loss_grad_fn, step_env_wrapped=step_env_wrapped, step_env=self.step_env, args=self.args, network=self.network, actor=self.actor, critic=self.critic),
             init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
             xs=None,
             length=1
@@ -250,8 +231,12 @@ class MetaPPOTask():
         
         # Outer-Loop (meta-loss)
         # rollout for batch_size (1024) which comes from num_steps * num_envs
-        agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.meta_rollout(agent_state, episode_stats, next_obs, terminated, truncated, key, handle)
-        storage = self.compute_gae(agent_state, next_obs, jnp.logical_or(terminated, truncated), storage, self.args)
+        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
+            partial(MetaPPOTask.step_once, env_step_fn=step_env_wrapped, step_env=self.step_env, network=self.network, actor=self.actor, critic=self.critic),
+            (agent_state, episode_stats, next_obs, terminated, truncated, key, handle),
+            (),
+            length=self.args.num_steps
+        )
 
         key, subkey = jax.random.split(key)
         def flatten(x):
@@ -265,7 +250,8 @@ class MetaPPOTask():
             flatten_storage.actions,
             flatten_storage.logprobs,
             flatten_storage.advantages,
-            flatten_storage.returns)
+            flatten_storage.returns,
+            self.args, self.network, self.actor, self.critic)
 
         return meta_loss, (agent_state, key,
                            episode_stats, next_obs, terminated, truncated, handle,

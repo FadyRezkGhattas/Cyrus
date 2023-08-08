@@ -84,7 +84,7 @@ if __name__ == '__main__':
     for update in range(1, args.num_updates + 1):
         update_time_start = time.time()
 
-        meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = ppo_task.meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        meta_loss, (agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl) = jitted_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         #ret, meta_grads = meta_loss_grad_fn(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
         #meta_loss, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, inner_loss, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
@@ -103,11 +103,11 @@ if __name__ == '__main__':
         )
         if not args.use_velo:
             writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
-        writer.add_scalar("losses/value_loss", v_loss[-1, -1].item(), global_step)
-        writer.add_scalar("losses/policy_loss", pg_loss[-1, -1].item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss[-1, -1].item(), global_step)
-        writer.add_scalar("losses/approx_kl", approx_kl[-1, -1].item(), global_step)
-        writer.add_scalar("losses/loss", inner_loss[-1, -1].item(), global_step)
+        writer.add_scalar("losses/value_loss", v_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/policy_loss", pg_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/entropy", entropy_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/approx_kl", approx_kl[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/loss", inner_loss[-1, -1, -1].item(), global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
         writer.add_scalar(
