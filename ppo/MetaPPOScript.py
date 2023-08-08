@@ -309,8 +309,8 @@ if __name__ == '__main__':
         
         return meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl
 
-    agent_update_and_meta_loss_jitted = jax.jit(agent_update_and_meta_loss)
-    #jitted_meta_training_step = jax.jit(meta_training_step)
+    #agent_update_and_meta_loss_jitted = jax.jit(agent_update_and_meta_loss)
+    jitted_meta_training_step = jax.jit(meta_training_step)
 
     start_time = time.time()
     global_step = 0
@@ -325,10 +325,10 @@ if __name__ == '__main__':
         #)
 
         # Without meta-gradients (agent_update_and_meta_loss works gracefully without recompilation issues even when decorated with @jax.jit)
-        meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = agent_update_and_meta_loss_jitted(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        #meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = agent_update_and_meta_loss_jitted(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         # Complete meta-learning (no recompilation issues but script throws OOM with standard batch size of 1024)
-        #meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl = jitted_meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
+        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl = jitted_meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
 
         global_step += args.num_steps * args.num_envs
         avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
