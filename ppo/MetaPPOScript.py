@@ -15,6 +15,11 @@ from baseline.common import *
 from VeLO.LoadVeLO import get_optax_velo
 from VeLO.VeloTrainState import VeloState
 
+def flatten_params(params):
+    ff_mod_stack = jax.tree_leaves(params["ff_mod_stack"])
+    lstm_init_state = jax.tree_leaves(params["lstm_init_state"])
+    rnn_params = jax.tree_leaves(params["rnn_params"])
+    return {"ff_mod_stack": ff_mod_stack, "lstm_init_state": lstm_init_state, "rnn_params": rnn_params}
 
 if __name__ == '__main__':
     args = parse_args()
@@ -78,6 +83,7 @@ if __name__ == '__main__':
     # Agent Optimizer Setup
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
     lopt, meta_params = get_optax_velo(total_steps)
+    flattened_meta_params = flatten_params(meta_params)
     agent_state = VeloState.create(
         apply_fn=None,
         params=params,
@@ -168,6 +174,12 @@ if __name__ == '__main__':
         entropy_loss = entropy.mean()
         loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
         return loss, (pg_loss, v_loss, entropy_loss, jax.lax.stop_gradient(approx_kl))
+    
+    def meta_loss(params, x, a, logp, mb_advantages, mb_returns, meta_params, norm_adv, initial_meta_params):
+        loss, (pg_loss, v_loss, entropy_loss, approx_kl) = ppo_loss(params, x, a, logp, mb_advantages, mb_returns, norm_adv)
+        flattened_updated_meta_params = flatten_params(meta_params)
+        regularization_value = jnp.sum(flattened_meta_params - initial_meta_params)
+        loss = loss + args.loss_distance_penalty
     
     agent_loss_fn = partial(ppo_loss, norm_adv = args.norm_adv)
     agent_grad_update_fn = jax.value_and_grad(agent_loss_fn, has_aux=True)
@@ -260,10 +272,9 @@ if __name__ == '__main__':
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
     
-    #@jax.jit
     def agent_update_and_meta_loss(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
         """Agent learning: update agent params"""
-        (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
+        (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle), (inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = jax.lax.scan(
             f=training_step,
             init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
             length=1,
@@ -285,21 +296,21 @@ if __name__ == '__main__':
             storage.advantages,
             storage.returns)
         
-        return meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl)
+        return meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl)
 
     def meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state):
         ret, meta_grads = jax.value_and_grad(agent_update_and_meta_loss, has_aux=True)(
             meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle
         )
-        meta_loss, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl = ret[0], *ret[1]
+        meta_loss_, meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl = ret[0], *ret[1]
 
         meta_param_update, meta_optim_state = meta_optimizer.update(meta_grads, meta_optim_state)
         meta_params = optax.apply_updates(meta_params, meta_param_update)
         
-        return meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl
+        return meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl
 
-    # agent_update_and_meta_loss_jitted = jax.jit(agent_update_and_meta_loss)
-    jitted_meta_training_step = jax.jit(meta_training_step)
+    agent_update_and_meta_loss_jitted = jax.jit(agent_update_and_meta_loss)
+    #jitted_meta_training_step = jax.jit(meta_training_step)
 
     start_time = time.time()
     global_step = 0
@@ -314,10 +325,10 @@ if __name__ == '__main__':
         #)
 
         # Without meta-gradients (agent_update_and_meta_loss works gracefully without recompilation issues even when decorated with @jax.jit)
-        #meta_loss, (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, pg_loss, v_loss, entropy_loss, approx_kl) = agent_update_and_meta_loss_jitted(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
+        meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = agent_update_and_meta_loss_jitted(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         # Complete meta-learning (no recompilation issues but script throws OOM with standard batch size of 1024)
-        meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss, pg_loss, v_loss, entropy_loss, approx_kl = jitted_meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
+        #meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl = jitted_meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
 
         global_step += args.num_steps * args.num_envs
         avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
@@ -328,13 +339,12 @@ if __name__ == '__main__':
         writer.add_scalar(
             "charts/avg_episodic_length", np.mean(jax.device_get(episode_stats.returned_episode_lengths)), global_step
         )
-        if not args.use_velo:
-            writer.add_scalar("charts/learning_rate", agent_state.opt_state[1].hyperparams["learning_rate"].item(), global_step)
-        writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        writer.add_scalar("losses/meta_loss", meta_loss.item(), global_step)
+        writer.add_scalar("losses/value_loss", inner_v_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/policy_loss", inner_pg_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/entropy", inner_entropy_loss[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/approx_kl", inner_approx_kl[-1, -1, -1].item(), global_step)
+        writer.add_scalar("losses/inner_loss", inner_loss[-1, -1, -1].item(), global_step)
+        #writer.add_scalar("losses/meta_loss", meta_loss_.item(), global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
         writer.add_scalar(
