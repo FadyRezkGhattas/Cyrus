@@ -78,6 +78,8 @@ def parse_args():
         help="the target KL divergence threshold")
     parser.add_argument("--use-velo", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Repalce Adam optimiser with VeLO from learned optimization library")
+    parser.add_argument("--meta-learn", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
+        help="Finetune VeLO if true. Otherwise, launch standard RL training.")
     
     # Finetuning specific arguments
     parser.add_argument("--num-meta-updates", type=int, default=100,
