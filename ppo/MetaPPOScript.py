@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from flax import jax_utils
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 from VeLO.LoadVeLO import get_optax_velo
@@ -67,6 +68,7 @@ if __name__ == '__main__':
     actor_params = actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()])))
     critic_params = critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()])))
     params = AgentParams(network_params, actor_params, critic_params)
+    params = jax_utils.replicate(params)
 
     # Agent Optimizer Setup
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
@@ -78,6 +80,8 @@ if __name__ == '__main__':
         tx=lopt,
         tx_params=meta_params,
     )
+
+    agent_state = jax_utils.replicate(agent_state)
 
     meta_optimizer = optax.chain(
       optax.clip(1),
@@ -322,12 +326,7 @@ if __name__ == '__main__':
             meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optim_state, meta_loss_, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl = jitted_meta_training_step(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle, meta_optimizer_state)
         # Standard RL
         else:
-            (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl) = jax.lax.scan(
-                f=training_step,
-                init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
-                length=1,
-                xs=None,
-            )
+            meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = agent_update_and_meta_loss_jitted(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle)
 
         global_step += args.num_steps * args.num_envs
         avg_episodic_return = np.mean(jax.device_get(episode_stats.returned_episode_returns))
