@@ -15,12 +15,6 @@ from baseline.common import *
 from VeLO.LoadVeLO import get_optax_velo
 from VeLO.VeloTrainState import VeloState
 
-def flatten_params(params):
-    ff_mod_stack = jax.tree_leaves(params["ff_mod_stack"])
-    lstm_init_state = jax.tree_leaves(params["lstm_init_state"])
-    rnn_params = jax.tree_leaves(params["rnn_params"])
-    return {"ff_mod_stack": ff_mod_stack, "lstm_init_state": lstm_init_state, "rnn_params": rnn_params}
-
 if __name__ == '__main__':
     args = parse_args()
     use_velo = 'velo' if args.use_velo else 'adam'
@@ -83,7 +77,7 @@ if __name__ == '__main__':
     # Agent Optimizer Setup
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
     lopt, meta_params = get_optax_velo(total_steps)
-    flattened_meta_params = flatten_params(meta_params)
+
     agent_state = VeloState.create(
         apply_fn=None,
         params=params,
