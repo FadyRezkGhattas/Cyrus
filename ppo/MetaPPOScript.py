@@ -350,3 +350,7 @@ if __name__ == '__main__':
         writer.add_scalar(
             "charts/SPS_update", int(args.num_envs * args.num_steps / (time.time() - update_time_start)), global_step
         )
+        for key in meta_params:
+            flattened = jax.flatten_util.ravel_pytree(meta_params[key])
+            flattened = flattened[0].max().item()
+            writer.add_scalar(f"Meta Gradients/{key}", flattened, global_step)
