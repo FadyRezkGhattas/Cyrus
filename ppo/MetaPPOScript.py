@@ -68,7 +68,7 @@ if __name__ == '__main__':
     actor_params = actor.init(actor_key, network.apply(network_params, np.array([envs.single_observation_space.sample()])))
     critic_params = critic.init(critic_key, network.apply(network_params, np.array([envs.single_observation_space.sample()])))
     params = AgentParams(network_params, actor_params, critic_params)
-    params = jax_utils.replicate(params)
+    #params = jax_utils.replicate(params)
 
     # Agent Optimizer Setup
     total_steps = args.num_updates * args.update_epochs * args.num_minibatches
@@ -81,7 +81,7 @@ if __name__ == '__main__':
         tx_params=meta_params,
     )
 
-    agent_state = jax_utils.replicate(agent_state)
+    #agent_state = jax_utils.replicate(agent_state)
 
     meta_optimizer = optax.chain(
       optax.clip(1),
