@@ -58,12 +58,6 @@ if __name__ == '__main__':
     next_obs, info = envs.reset()
     terminated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
     truncated = jnp.zeros(args.num_envs, dtype=jax.numpy.bool_)
-    episode_stats = EpisodeStatistics(
-                episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-                episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-                returned_episode_returns=jnp.zeros(args.num_envs, dtype=jnp.float32),
-                returned_episode_lengths=jnp.zeros(args.num_envs, dtype=jnp.int32),
-            )
 
     # Agent Setup
     network = Network()
