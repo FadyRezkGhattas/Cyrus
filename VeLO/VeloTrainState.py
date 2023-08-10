@@ -12,14 +12,6 @@ class VeloState(struct.PyTreeNode):
     params: core.FrozenDict[str, Any] = struct.field(pytree_node=True)
     tx: optax.GradientTransformation = struct.field(pytree_node=False)
     opt_state: optax.OptState = struct.field(pytree_node=True)
-    # A simple extension of TrainState to also include batch statistics
-    # If a model has no batch statistics, it is None
-    batch_stats : Any = None
-    # You can further extend the TrainState by any additional part here
-    # For example, rng to keep for init, dropout, etc.
-    rng : Any = None
-    # add args to access some global hyperparameters
-    args : Any = None
 
     @classmethod
     def create(cls, *, apply_fn, params, tx, tx_params, **kwargs):
