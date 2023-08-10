@@ -19,7 +19,7 @@ from VeLO.VeloTrainState import VeloState
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
 
-class PPOTask():
+class MetaPPOTask():
     args : Any = None
     network : Network = None
     actor : Actor = None
@@ -206,7 +206,6 @@ class PPOTask():
         )
         return agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle
 
-    @partial(jax.jit, static_argnums=(0,))
     def inner_epoch(self, carry, unused_t):
         meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle = carry
         agent_state, episode_stats, next_obs, terminated, truncated, storage, key, handle = self.rollout(
@@ -223,3 +222,38 @@ class PPOTask():
         )
 
         return (meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle), (loss, pg_loss, v_loss, entropy_loss, approx_kl)
+    
+    @partial(jax.jit, static_argnums=(0,))
+    def meta_loss(self, meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle):
+        # Inner-Loop: Agent Learning
+        (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle), (inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl) = jax.lax.scan(
+            self.inner_epoch,
+            init=(meta_params, agent_state, key, episode_stats, next_obs, terminated, truncated, handle),
+            xs=None,
+            length=1
+        )
+        
+        # Outer-Loop (meta-loss)
+        # rollout for batch_size (1024) which comes from num_steps * num_envs
+        (agent_state, episode_stats, next_obs, terminated, truncated, key, handle), storage = jax.lax.scan(
+            partial(self.step_once, env_step_fn=step_env_wrapped),
+            (agent_state, episode_stats, next_obs, terminated, truncated, key, handle),
+            (),
+            length=self.args.num_steps
+        )
+
+        key, subkey = jax.random.split(key)
+        def flatten(x):
+            return x.reshape((-1,) + x.shape[2:])
+        
+        flatten_storage = jax.tree_map(flatten, storage)
+        
+        meta_loss, ret = self.ppo_loss(
+            agent_state.params,
+            flatten_storage.obs,
+            flatten_storage.actions,
+            flatten_storage.logprobs,
+            flatten_storage.advantages,
+            flatten_storage.returns)
+
+        return meta_loss, (meta_params, agent_state, key, inner_episode_stats, next_obs, terminated, truncated, handle, inner_loss, inner_pg_loss, inner_v_loss, inner_entropy_loss, inner_approx_kl)

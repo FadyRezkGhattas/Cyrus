@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from baseline.common import *
-from PPOTask import *
+from MetaPPOTask import *
 from VeLO.LoadVeLO import get_optax_velo
 from VeLO.VeloTrainState import VeloState
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
             )
     
     # Init PPO and Agent Optimizer Setup
-    ppo_task = PPOTask()
+    ppo_task = MetaPPOTask()
     ppo_task.args = args
     params, key = ppo_task.init(key)
 
